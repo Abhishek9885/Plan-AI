@@ -36,7 +36,7 @@ const app = (() => {
 
   function signInWithGoogle() {
     const provider = new firebase.auth.GoogleAuthProvider();
-    auth.signInWithPopup(provider).catch(e => { console.error(e); toast('Sign in failed', 'error'); });
+    auth.signInWithRedirect(provider).catch(e => { console.error(e); toast('Sign in failed', 'error'); });
   }
   function signOut() { auth.signOut(); }
 
