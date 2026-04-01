@@ -60,14 +60,14 @@
       <div class="header-right">
         <button class="header-btn focus-mode-btn" onclick="app.toggleFocusMode()" title="Focus Mode (F)"><span>🎧</span><span class="header-btn-text">Focus</span></button>
         <button class="header-btn notif-bell-btn" id="notifBellBtn" onclick="app.requestNotifications()" title="Notifications"><span>🔔</span><span class="header-btn-text" id="notifLabel">Notify</span><span class="notif-dot" id="notifDot"></span></button>
-        <button class="header-btn" onclick="app.showShortcuts()" title="Keyboard shortcuts"><span>⌨️</span><span
+        <button class="header-btn hide-on-mobile" onclick="app.showShortcuts()" title="Keyboard shortcuts"><span>⌨️</span><span
             class="header-btn-text">Shortcuts</span></button>
         <button class="header-btn theme-toggle-btn" id="themeToggle" onclick="app.toggleTheme()"
           title="Toggle theme"><span id="themeIcon">🌙</span><span class="header-btn-text"
             id="themeLabel">Dark</span></button>
-        <button class="header-btn" onclick="app.exportData()" title="Export all data"><span>📤</span><span
+        <button class="header-btn hide-on-mobile" onclick="app.exportData()" title="Export all data"><span>📤</span><span
             class="header-btn-text">Export</span></button>
-        <button class="header-btn" onclick="document.getElementById('importInput').click()"
+        <button class="header-btn hide-on-mobile" onclick="document.getElementById('importInput').click()"
           title="Import data"><span>📥</span><span class="header-btn-text">Import</span></button>
         <input type="file" id="importInput" accept=".json" style="display:none" onchange="app.handleImport(this)">
         <button class="header-btn" onclick="app.signOut()" title="Sign Out"><span>🚪</span><span class="header-btn-text">Sign Out</span></button>

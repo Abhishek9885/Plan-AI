@@ -2672,7 +2672,11 @@ textarea {
   }
 
   .menu-toggle {
-    display: flex
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
   }
 
   .view {
@@ -2680,7 +2684,31 @@ textarea {
   }
 
   .main-header {
-    padding: 0 12px
+    padding: 0 12px;
+    gap: 8px;
+  }
+
+  .header-left {
+    gap: 8px;
+  }
+
+  .header-left h1 {
+    font-size: 16px;
+  }
+
+  #dateDisplay {
+    display: none;
+  }
+
+  .hide-on-mobile {
+    display: none !important;
+  }
+
+  .header-btn {
+    padding: 8px;
+    width: 32px;
+    height: 32px;
+    justify-content: center;
   }
 
   .quick-add-form {
