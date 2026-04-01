@@ -35,8 +35,15 @@ const app = (() => {
   let currentUser = null;
 
   function signInWithGoogle() {
+    toast('Starting Google Sign In...', 'info');
     const provider = new firebase.auth.GoogleAuthProvider();
-    auth.signInWithPopup(provider).catch(e => { console.error(e); toast('Sign in failed', 'error'); });
+    auth.signInWithPopup(provider).then((result) => {
+        toast('Popup closed. Verifying token...', 'success');
+    }).catch(e => {
+        console.error(e);
+        toast('Error: ' + e.message, 'error');
+        alert("Google Auth Error: " + e.message); // Mobile friendly alert
+    });
   }
   function signOut() { auth.signOut(); }
 
