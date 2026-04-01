@@ -9,5 +9,11 @@
         }
       ]
     }
+  ],
+  "rewrites": [
+    {
+      "source": "/__/auth/(.*)",
+      "destination": "https://plan-ai-b624f.firebaseapp.com/__/auth/$1"
+    }
   ]
 }

@@ -22,7 +22,7 @@ const app = (() => {
   // =================== FIREBASE SETUP ===================
   const firebaseConfig = {
     apiKey: "AIzaSyBtHxv_L9P5DuMh1JyWZJhjDnYKBbNrSQw",
-    authDomain: "plan-ai-b624f.firebaseapp.com",
+    authDomain: "plan-ai-tan.vercel.app",
     projectId: "plan-ai-b624f",
     storageBucket: "plan-ai-b624f.firebasestorage.app",
     messagingSenderId: "413233057634",
