@@ -34,12 +34,22 @@ const app = (() => {
   const db = firebase.firestore();
   let currentUser = null;
 
+  auth.onAuthStateChanged(user => {
+    const overlay = document.getElementById('authOverlay');
+    if (user) {
+      currentUser = user;
+      if (overlay) overlay.classList.add('auth-hidden');
+    } else {
+      currentUser = null;
+      if (overlay) overlay.classList.remove('auth-hidden');
+    }
+  });
+
   function signInWithGoogle() {
-    toast('Redirecting to Google...', 'info');
     const provider = new firebase.auth.GoogleAuthProvider();
-    auth.signInWithRedirect(provider).catch(e => {
+    auth.signInWithPopup(provider).catch(e => {
         console.error(e);
-        alert("Google Auth Error: " + e.message);
+        toast("Google Auth Error: " + e.message, 'error');
     });
   }
   function signOut() { auth.signOut(); }
