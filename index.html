@@ -16,6 +16,7 @@
 </head>
 
 <body>
+  <div class="cursor-glow" id="cursorGlow"></div>
   <script>
     // Force clear old service worker cache on load
     if ('caches' in window) caches.keys().then(k => k.forEach(n => caches.delete(n)));
@@ -60,6 +61,8 @@
       <div class="header-right">
         <button class="header-btn focus-mode-btn" onclick="app.toggleFocusMode()" title="Focus Mode (F)"><span>🎧</span><span class="header-btn-text">Focus</span></button>
         <button class="header-btn notif-bell-btn" id="notifBellBtn" onclick="app.requestNotifications()" title="Notifications"><span>🔔</span><span class="header-btn-text" id="notifLabel">Notify</span><span class="notif-dot" id="notifDot"></span></button>
+        <button class="header-btn hide-on-mobile" onclick="app.showSettings()" title="Settings"><span>⚙️</span><span
+            class="header-btn-text">Settings</span></button>
         <button class="header-btn hide-on-mobile" onclick="app.showShortcuts()" title="Keyboard shortcuts"><span>⌨️</span><span
             class="header-btn-text">Shortcuts</span></button>
         <button class="header-btn theme-toggle-btn" id="themeToggle" onclick="app.toggleTheme()"
@@ -173,7 +176,10 @@
       </div>
 
       <div class="card" id="insightsCard">
-        <h3>🧠 AI Insights</h3>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <h3>🧠 AI Insights</h3>
+          <button class="btn btn-sm btn-glow" onclick="app.generateDailyReflection()">✨ Run Daily Reflection</button>
+        </div>
         <div id="insightsList"></div>
       </div>
     </section>
@@ -441,6 +447,40 @@
         <div class="shortcut-row"><span>Pomodoro</span><span class="shortcut-key">7</span></div>
         <div class="shortcut-row"><span>Close / Cancel</span><span class="shortcut-key">Esc</span></div>
         <div class="shortcut-row"><span>Show shortcuts</span><span class="shortcut-key">?</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Command Palette Overlay -->
+  <div class="modal-overlay" id="commandPalette">
+    <div class="modal" style="position:relative; width:600px; max-width:95%; padding: 10px; background: rgba(15,15,25,0.7); backdrop-filter: blur(40px);">
+      <input type="text" id="cmdInput" class="cmd-input" placeholder="Type a command or 'Add: Read 30m'..." autocomplete="off">
+      <div id="cmdResults" class="cmd-results"></div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="settingsModal">
+    <div class="modal" style="position:relative; width:400px; max-width:90%;">
+      <button class="modal-close" onclick="app.closeSettings()">✕</button>
+      <h3>⚙️ General Settings</h3>
+      <div class="form-group" style="margin-top:15px;">
+        <label>Google Gemini API Key (For AI Features)</label>
+        <input type="password" id="geminiApiKeyInput" placeholder="AIzaSy... (Stored locally only)" style="width:100%;">
+        <p style="font-size:11px; color:var(--text-tertiary); margin-top:5px;">Required for Daily Reflections. Get yours free from Google AI Studio.</p>
+      </div>
+      <div class="form-actions" style="margin-top:20px;">
+        <button class="btn btn-outline" onclick="app.closeSettings()">Cancel</button>
+        <button class="btn btn-primary" onclick="app.saveSettings()">Save Configuration</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="reflectionModal">
+    <div class="modal" style="position:relative; width:500px; max-width:90%;">
+      <button class="modal-close" onclick="app.closeReflection()">✕</button>
+      <h3>✨ AI Daily Reflection</h3>
+      <div id="reflectionContent" style="margin-top:15px; line-height:1.5; font-size:14px;">
+        <!-- AI content loads here -->
       </div>
     </div>
   </div>

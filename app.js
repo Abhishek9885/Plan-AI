@@ -756,9 +756,14 @@ const app = (() => {
   function closeShortcuts() { document.getElementById('shortcutsModal').classList.remove('show') }
 
   function handleKeyboard(e) {
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+    if (e.target.id !== 'cmdInput' && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT')) return;
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      toggleCommandPalette();
+      return;
+    }
     const k = e.key.toLowerCase();
-    if (k === 'escape') { closeShortcuts(); document.getElementById('addGoalForm').style.display = 'none'; document.getElementById('addHabitForm').style.display = 'none'; return }
+    if (k === 'escape') { closeShortcuts(); if(typeof closeCommandPalette !== 'undefined') closeCommandPalette(); document.getElementById('addGoalForm').style.display = 'none'; document.getElementById('addHabitForm').style.display = 'none'; return }
     if (k === '?' || k === '/') { e.preventDefault(); showShortcuts(); return }
     if (k === '1') switchView('dashboard');
     else if (k === '2') switchView('goals');
@@ -771,6 +776,88 @@ const app = (() => {
     else if (k === 'g') generateSchedule();
     else if (k === 't') toggleTheme();
     else if (k === 'f') toggleFocusMode();
+  }
+
+  // =================== COMMAND PALETTE ===================
+  let cmdSelIndex = 0;
+  function toggleCommandPalette() {
+    const pal = document.getElementById('commandPalette');
+    if (!pal) return;
+    if (pal.classList.contains('show')) closeCommandPalette();
+    else {
+      pal.classList.add('show');
+      const input = document.getElementById('cmdInput');
+      input.value = '';
+      setTimeout(() => input.focus(), 100);
+      renderCmdResults();
+    }
+  }
+  function closeCommandPalette() {
+    const pal = document.getElementById('commandPalette');
+    if (pal) pal.classList.remove('show');
+    const input = document.getElementById('cmdInput');
+    if (input) input.blur();
+  }
+  function executeCommand(cmd) {
+    closeCommandPalette();
+    if (cmd.action) cmd.action();
+    else if (cmd.addGoal) {
+      const p = parseNaturalGoal(cmd.text);
+      addGoal(p.title, p._hasDur ? p.duration : 30, p._hasPri ? p.priority : 'medium', p._hasCat ? p.category : 'work', p.urgent, 'none', '');
+    }
+  }
+  function renderCmdResults() {
+    const input = document.getElementById('cmdInput').value.toLowerCase();
+    const resEl = document.getElementById('cmdResults');
+    const commands = [
+      { id: '1', title: 'Dashboard', icon: '📊', action: () => switchView('dashboard') },
+      { id: '2', title: 'Goals', icon: '🎯', action: () => switchView('goals') },
+      { id: '3', title: 'AI Schedule', icon: '🤖', action: () => switchView('schedule') },
+      { id: '4', title: 'Habits', icon: '✨', action: () => switchView('habits') },
+      { id: '5', title: 'Calendar', icon: '📅', action: () => switchView('calendar') },
+      { id: 't', title: 'Toggle Theme', icon: '🌙', action: toggleTheme },
+      { id: 'f', title: 'Focus Mode', icon: '🎧', action: toggleFocusMode },
+      { id: 'g', title: 'Generate Schedule', icon: '⚡', action: generateSchedule }
+    ];
+    let filtered = commands.filter(c => c.title.toLowerCase().includes(input));
+    if (input.length > 2 && filtered.length === 0) {
+      filtered.push({ title: `Add Goal: "${input}"`, icon: '✨', addGoal: true, text: input });
+    }
+    if (filtered.length === 0) { resEl.innerHTML = '<div style="padding:10px;text-align:center;color:var(--text-tertiary)">No matches found</div>'; return; }
+    cmdSelIndex = Math.max(0, Math.min(cmdSelIndex, filtered.length - 1));
+    resEl.innerHTML = filtered.map((c, i) => `
+      <div class="cmd-item ${i === cmdSelIndex ? 'selected' : ''}" data-index="${i}">
+        <span class="cmd-item-icon">${c.icon}</span>
+        <span class="cmd-item-label">${c.title}</span>
+        ${c.id ? `<span class="cmd-item-shortcut">${c.id.toUpperCase()}</span>` : ''}
+      </div>
+    `).join('');
+    
+    const items = resEl.querySelectorAll('.cmd-item');
+    items.forEach(el => {
+      el.addEventListener('click', () => executeCommand(filtered[parseInt(el.dataset.index)]));
+      el.addEventListener('mouseenter', () => { cmdSelIndex = parseInt(el.dataset.index); renderCmdResults(); });
+    });
+  }
+
+  function initCommandPalette() {
+    const input = document.getElementById('cmdInput');
+    if (!input) return;
+    input.addEventListener('input', () => { cmdSelIndex = 0; renderCmdResults(); });
+    input.addEventListener('keydown', e => {
+      const items = document.querySelectorAll('.cmd-item');
+      if (items.length === 0) return;
+      if (e.key === 'ArrowDown') { e.preventDefault(); cmdSelIndex = (cmdSelIndex + 1) % items.length; renderCmdResults(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); cmdSelIndex = (cmdSelIndex - 1 + items.length) % items.length; renderCmdResults(); }
+      else if (e.key === 'Enter') { 
+        e.preventDefault(); 
+        const sel = document.querySelector('.cmd-item.selected');
+        if (sel) sel.click(); 
+      }
+    });
+    document.getElementById('commandPalette').addEventListener('click', e => {
+      if (e.target.id === 'commandPalette') closeCommandPalette();
+    });
   }
 
   // =================== RECURRING ===================
@@ -960,6 +1047,14 @@ const app = (() => {
 
   // =================== INIT ===================
   function init() {
+    // Cursor glow tracking globally
+    document.addEventListener('mousemove', e => {
+      document.documentElement.style.setProperty('--mouse-x', `${e.clientX}px`);
+      document.documentElement.style.setProperty('--mouse-y', `${e.clientY}px`);
+    });
+
+    initCommandPalette();
+
     load();
     updateStreak();
     processRecurringGoals();
@@ -969,7 +1064,8 @@ const app = (() => {
 
     // Nav clicks
     document.querySelectorAll('.nav-item').forEach(i => i.addEventListener('click', () => switchView(i.dataset.view)));
-    document.getElementById('menuToggle').addEventListener('click', () => { document.getElementById('sidebar').classList.toggle('open'); document.getElementById('sidebarOverlay').classList.toggle('show') });
+    const menuToggle = document.getElementById('menuToggle');
+    if (menuToggle) menuToggle.addEventListener('click', () => { document.getElementById('sidebar').classList.toggle('open'); document.getElementById('sidebarOverlay').classList.toggle('show') });
     document.getElementById('sidebarOverlay').addEventListener('click', () => { document.getElementById('sidebar').classList.remove('open'); document.getElementById('sidebarOverlay').classList.remove('show') });
 
     // Quick add
