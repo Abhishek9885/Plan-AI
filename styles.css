@@ -3917,23 +3917,38 @@ input[type="text"]:focus, input[type="number"]:focus, select:focus, textarea:foc
 
   /* Fix main header layout */
   .main-header {
-    flex-wrap: wrap;
+    flex-direction: column;
     align-items: flex-start;
     height: auto;
     padding: 12px;
   }
   
+  .header-left {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
   .header-right {
     flex-wrap: wrap;
-    margin-top: 10px;
+    margin-top: 12px;
     width: 100%;
     justify-content: flex-start;
+    gap: 8px;
   }
   
-  .hide-on-mobile {
-    display: none !important;
+  .header-btn {
+    flex: 1;
+    min-width: 44px;
+    justify-content: center;
+    padding: 10px;
   }
   
+  .header-btn-text, .hide-on-mobile {
+    display: none !important; /* Converts top header to pure icons */
+  }
+
   /* Shrink text inputs gently */
   input[type="text"], input[type="number"], select, textarea {
     padding: 10px;
@@ -3963,12 +3978,12 @@ input[type="text"]:focus, input[type="number"]:focus, select:focus, textarea:foc
     bottom: 0;
     left: 0;
     width: 100vw;
-    height: 70px;
+    height: 75px;
     flex-direction: row;
     z-index: 10000;
     border-right: none;
     border-top: 1px solid var(--glass-border);
-    padding: 0 10px;
+    padding: 0;
     background: var(--bg-primary); 
     box-shadow: 0 -10px 30px rgba(0,0,0,0.5);
     display: flex;
@@ -3981,46 +3996,50 @@ input[type="text"]:focus, input[type="number"]:focus, select:focus, textarea:foc
     box-shadow: 0 -10px 30px rgba(0,0,0,0.05);
   }
 
-  .logo-container,
-  .user-profile,
+  .sidebar-logo,
+  .sidebar-footer,
   .nav-item span,
-  .nav-badge {
-    display: none !important; /* Hide text & logos */
+  .nav-divider {
+    display: none !important; /* Hide text, logos, dividers & xp tracking on bottom nav */
   }
 
   .nav-menu {
     display: flex;
     flex-direction: row;
-    justify-content: space-around;
+    justify-content: space-between;
     align-items: center;
     width: 100%;
     margin: 0;
-    padding: 0;
-    gap: 5px;
+    padding: 0 10px;
+    gap: 4px;
+    overflow-x: auto; /* Just in case */
   }
   
   .nav-item {
     margin-bottom: 0;
-    padding: 12px 20px !important;
+    padding: 14px !important;
     justify-content: center;
-    border-radius: 12px;
+    border-radius: 14px;
+    flex: 1;
+    text-align: center;
   }
 
   .nav-item .nav-icon {
     margin-right: 0 !important;
-    font-size: 22px;
+    font-size: 24px;
+    display: block;
   }
   
   /* Make main content leave space for bottom bar */
   .main-content {
     margin-left: 0 !important;
-    padding-bottom: 90px !important; 
+    padding-bottom: 100px !important; 
     width: 100vw;
   }
   
   /* Lift AI Coach above bottom nav menu */
   .coach-container {
-    bottom: 80px;
+    bottom: 85px;
   }
 }
 
