@@ -3915,11 +3915,23 @@ input[type="text"]:focus, input[type="number"]:focus, select:focus, textarea:foc
     align-self: flex-end;
   }
 
-  /* Fix top header and sidebar bottom layout */
-  .top-header {
+  /* Fix main header layout */
+  .main-header {
     flex-wrap: wrap;
-    gap: 10px;
-    border-radius: 0 0 16px 16px;
+    align-items: flex-start;
+    height: auto;
+    padding: 12px;
+  }
+  
+  .header-right {
+    flex-wrap: wrap;
+    margin-top: 10px;
+    width: 100%;
+    justify-content: flex-start;
+  }
+  
+  .hide-on-mobile {
+    display: none !important;
   }
   
   /* Shrink text inputs gently */
