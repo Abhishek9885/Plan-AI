@@ -3918,6 +3918,79 @@ input[type="text"]:focus, input[type="number"]:focus, select:focus, textarea:foc
     width: 100%;
     justify-content: space-between;
   }
+
+  /* =======================================
+     SIDEBAR -> BOTTOM NAVIGATION BAR 
+     ======================================= */
+  .app-container {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    transform: none !important; /* Overrides previous hide logic */
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100vw;
+    height: 70px;
+    flex-direction: row;
+    z-index: 10000;
+    border-right: none;
+    border-top: 1px solid var(--glass-border);
+    padding: 0 10px;
+    background: var(--bg-primary); 
+    box-shadow: 0 -10px 30px rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  [data-theme="light"] .sidebar {
+    background: #ffffff;
+    box-shadow: 0 -10px 30px rgba(0,0,0,0.05);
+  }
+
+  .logo-container,
+  .user-profile,
+  .nav-item span,
+  .nav-badge {
+    display: none !important; /* Hide text & logos */
+  }
+
+  .nav-menu {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-around;
+    align-items: center;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    gap: 5px;
+  }
+  
+  .nav-item {
+    margin-bottom: 0;
+    padding: 12px 20px !important;
+    justify-content: center;
+    border-radius: 12px;
+  }
+
+  .nav-item .nav-icon {
+    margin-right: 0 !important;
+    font-size: 22px;
+  }
+  
+  /* Make main content leave space for bottom bar */
+  .main-content {
+    margin-left: 0 !important;
+    padding-bottom: 90px !important; 
+    width: 100vw;
+  }
+  
+  /* Lift AI Coach above bottom nav menu */
+  .coach-container {
+    bottom: 80px;
+  }
 }
 
 @media (max-width: 480px) {
