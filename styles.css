@@ -3966,80 +3966,59 @@ input[type="text"]:focus, input[type="number"]:focus, select:focus, textarea:foc
   }
 
   /* =======================================
-     SIDEBAR -> BOTTOM NAVIGATION BAR 
+     SIDEBAR -> SLIDING OVERLAY (HAMBURGER)
      ======================================= */
   .app-container {
-    flex-direction: column;
+    flex-direction: row;
   }
-
+  
   .sidebar {
-    transform: none !important; /* Overrides previous hide logic */
     position: fixed;
-    bottom: 0;
-    left: 0;
-    width: 100vw;
-    height: 75px;
-    flex-direction: row;
+    top: 0; left: 0; bottom: 0;
+    height: 100vh;
     z-index: 10000;
-    border-right: none;
-    border-top: 1px solid var(--glass-border);
-    padding: 0;
-    background: var(--bg-primary); 
-    box-shadow: 0 -10px 30px rgba(0,0,0,0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    transform: translateX(-100%) !important; /* hide by default */
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 20px 0 30px rgba(0,0,0,0.5);
+    flex-direction: column !important;
   }
   
-  [data-theme="light"] .sidebar {
-    background: #ffffff;
-    box-shadow: 0 -10px 30px rgba(0,0,0,0.05);
+  .sidebar.active {
+    transform: translateX(0) !important;
   }
 
-  .sidebar-logo,
-  .sidebar-footer,
-  .nav-item span,
-  .nav-divider {
-    display: none !important; /* Hide text, logos, dividers & xp tracking on bottom nav */
-  }
-
-  .nav-menu {
-    display: flex;
-    flex-direction: row;
-    justify-content: space-between;
-    align-items: center;
-    width: 100%;
-    margin: 0;
-    padding: 0 10px;
-    gap: 4px;
-    overflow-x: auto; /* Just in case */
-  }
-  
-  .nav-item {
-    margin-bottom: 0;
-    padding: 14px !important;
-    justify-content: center;
-    border-radius: 14px;
-    flex: 1;
-    text-align: center;
-  }
-
-  .nav-item .nav-icon {
-    margin-right: 0 !important;
-    font-size: 24px;
-    display: block;
-  }
-  
-  /* Make main content leave space for bottom bar */
   .main-content {
     margin-left: 0 !important;
-    padding-bottom: 100px !important; 
     width: 100vw;
   }
   
-  /* Lift AI Coach above bottom nav menu */
   .coach-container {
-    bottom: 85px;
+    bottom: 20px;
+  }
+
+  /* Show hamburger button */
+  .menu-toggle {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    cursor: pointer;
+    margin-right: 15px;
+  }
+  
+  /* Reset menu items flex directions just in case */
+  .nav-menu {
+    flex-direction: column !important;
+  }
+  .nav-item {
+    justify-content: flex-start !important;
+    text-align: left !important;
+  }
+  .nav-item .nav-icon {
+    margin-right: 14px !important;
   }
 }
 
