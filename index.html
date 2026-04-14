@@ -98,10 +98,8 @@
           <div class="stat-value" id="statCompleted">0</div>
           <div class="stat-label">Completed</div>
         </div>
-        <div class="stat-card">
-          <div class="stat-icon">🔥</div>
-          <div class="stat-value" id="statStreak">0</div>
-          <div class="stat-label">Day Streak</div>
+        <div class="stat-card" id="streakDisplay">
+          <!-- Streak visual rendered here -->
         </div>
         <div class="stat-card">
           <div class="stat-icon">⏱️</div>
@@ -175,12 +173,41 @@
         <div class="nlp-preview" id="nlpPreview" style="display:none"><span class="nlp-sparkle">✨</span><span id="nlpParsedText"></span></div>
       </div>
 
-      <div class="card" id="insightsCard">
+      <!-- Analytics Mini-Panel -->
+      <div class="card premium-card gradient-border analytics-mini-panel" id="analyticsMiniPanel">
+        <h3>📊 Quick Analytics</h3>
+        <div class="analytics-mini-grid">
+          <div class="analytics-mini-item">
+            <div class="analytics-mini-value" id="analyticsMiniPct">0%</div>
+            <div class="analytics-mini-label">Completion</div>
+          </div>
+          <div class="analytics-mini-item">
+            <div class="analytics-mini-value" id="analyticsMiniTotal">0</div>
+            <div class="analytics-mini-label">Total Tasks</div>
+          </div>
+          <div class="analytics-mini-item">
+            <div class="analytics-mini-value" id="analyticsMiniFocus">0m</div>
+            <div class="analytics-mini-label">Focus Time</div>
+          </div>
+          <div class="analytics-mini-item">
+            <div class="analytics-mini-value" id="analyticsMiniDone">0</div>
+            <div class="analytics-mini-label">Completed</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card premium-card gradient-border" id="insightsCard">
         <div style="display:flex; justify-content:space-between; align-items:center;">
           <h3>🧠 AI Insights</h3>
           <button class="btn btn-sm btn-glow" onclick="app.generateDailyReflection()">✨ Run Daily Reflection</button>
         </div>
         <div id="insightsList"></div>
+      </div>
+
+      <!-- Smart Suggestions Panel -->
+      <div class="card premium-card gradient-border suggestions-panel" id="suggestionsPanel">
+        <h3>💡 Smart Suggestions</h3>
+        <div id="suggestionsList"></div>
       </div>
     </section>
 
@@ -222,6 +249,14 @@
               </select></div>
           </div>
           <div class="form-row" style="margin-bottom:12px">
+            <div class="form-group"><label>Difficulty</label>
+              <div class="difficulty-selector" id="difficultySelector">
+                <button type="button" class="difficulty-btn easy" data-difficulty="easy">🟢 Easy</button>
+                <button type="button" class="difficulty-btn medium active" data-difficulty="medium">🟡 Medium</button>
+                <button type="button" class="difficulty-btn hard" data-difficulty="hard">🔴 Hard</button>
+              </div>
+              <div class="difficulty-hint" id="difficultyHint">⏱️ Auto: 45 min</div>
+            </div>
             <div class="form-group"><label>Urgency</label><select id="goalUrgent">
                 <option value="false">Not Urgent</option>
                 <option value="true">⚡ Urgent</option>
@@ -280,6 +315,12 @@
         <h2>AI Schedule</h2>
         <div class="view-actions">
           <button class="btn btn-glow" onclick="app.generateSchedule()">⚡ Generate Smart Schedule</button>
+          <select id="peakHoursSelect" class="peak-hours-select" title="Peak productivity hours">
+            <option value="morning">🌅 Morning Peak</option>
+            <option value="evening">🌆 Evening Peak</option>
+          </select>
+          <button class="btn btn-outline" id="rescheduleBtn" onclick="app.rescheduleMissed()" style="display:none">🔄 Reschedule
+            Missed</button>
           <button class="btn btn-outline" id="exportIcsBtn" onclick="app.exportICS()" style="display:none">📅 Export
             .ics</button>
           <button class="btn btn-outline" id="shareScheduleBtn" onclick="app.shareSchedule()" style="display:none">📤
@@ -530,6 +571,26 @@
 
   <script src="scheduler.js?v=6"></script>
   <script src="app.js?v=7"></script>
+  <!-- AI Coach Chatbox -->
+  <div class="coach-container" id="coachBox">
+    <div class="coach-toggle" onclick="app.toggleCoachBox()">
+      🤖 AI Coach
+    </div>
+    <div class="coach-window">
+      <div class="coach-header">
+        <span>🤖 Personal Planner Coach</span>
+        <button class="coach-close-btn" onclick="app.toggleCoachBox()">✕</button>
+      </div>
+      <div class="coach-messages" id="coachMessages">
+        <!-- Messages rendered here -->
+      </div>
+      <div class="coach-input-area">
+        <input type="text" id="coachInput" placeholder="Try 'plan my day' or 'help'..." onkeydown="if(event.key === 'Enter') app.sendCoachMessage()">
+        <button onclick="app.sendCoachMessage()">Send</button>
+      </div>
+    </div>
+  </div>
+
 </body>
 
 </html>

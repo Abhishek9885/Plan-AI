@@ -6,14 +6,15 @@ const app = (() => {
   const S = {
     goals: [], habits: [], schedule: [], scheduleCompleted: {},
     calMonth: new Date().getMonth(), calYear: new Date().getFullYear(),
-    currentView: 'dashboard', goalView: 'list', selPriority: 'medium',
+    currentView: 'dashboard', goalView: 'list', selPriority: 'medium', selDifficulty: 'medium',
     streak: 0, bestStreak: 0, lastActiveDate: null, scheduledDates: {},
     theme: localStorage.getItem('planai_theme') || 'dark',
     pomo: { mode: 'work', running: false, timeLeft: 25 * 60, sessions: 0, totalMin: 0, linkedGoal: '' },
     analytics: { dailyCompleted: {}, dailyFocus: {}, totalCreated: 0, totalCompleted: 0 },
     expandedGoals: {}, soundEnabled: true,
     xp: 0, level: 0, productivityScores: {},
-    notificationsEnabled: false, focusMode: false
+    notificationsEnabled: false, focusMode: false,
+    focusTimer: { taskId: null, taskTitle: '', running: false, timeLeft: 25 * 60, interval: null }
   };
   let pomoInterval = null;
   const ambientState = { ctx: null, source: null, gain: null, type: null };
@@ -322,12 +323,204 @@ const app = (() => {
     document.getElementById('insightsList').innerHTML = (ins.length ? ins : ['🎯 Your day is well-balanced!']).map(t => `<div style="padding:8px 12px;background:var(--bg-surface);border-radius:var(--radius-md);font-size:12px;margin-bottom:4px">${t}</div>`).join('');
     renderProductivityScore();
     renderXPBar();
+    renderAnalyticsMini();
+    renderSuggestions();
+    renderBurnoutAlert();
+    renderStreakDisplay();
+  }
+
+  // =================== ANALYTICS MINI-PANEL ===================
+  function renderAnalyticsMini() {
+    const td = today();
+    const totalTasks = S.goals.length;
+    const completedTasks = S.goals.filter(g => g.completed).length;
+    const pct = totalTasks > 0 ? Math.round(completedTasks / totalTasks * 100) : 0;
+    const focusMin = (S.analytics.dailyFocus[td] || 0) + S.pomo.totalMin;
+
+    const pctEl = document.getElementById('analyticsMiniPct');
+    const totalEl = document.getElementById('analyticsMiniTotal');
+    const focusEl = document.getElementById('analyticsMiniFocus');
+    const doneEl = document.getElementById('analyticsMiniDone');
+
+    if (pctEl) pctEl.textContent = pct + '%';
+    if (totalEl) totalEl.textContent = totalTasks;
+    if (focusEl) focusEl.textContent = focusMin >= 60 ? Math.floor(focusMin / 60) + 'h ' + (focusMin % 60) + 'm' : focusMin + 'm';
+    if (doneEl) doneEl.textContent = completedTasks;
+  }
+
+  // =================== SMART SUGGESTIONS ===================
+  function renderSuggestions() {
+    const td = today();
+    const completedTasks = S.goals.filter(g => g.completed).length;
+    const focusMin = (S.analytics.dailyFocus[td] || 0) + S.pomo.totalMin;
+    const suggestions = AIScheduler.getSuggestions({
+      goals: S.goals,
+      completedCount: completedTasks,
+      totalCount: S.goals.length,
+      focusMinutes: focusMin,
+      habits: S.habits
+    });
+    const el = document.getElementById('suggestionsList');
+    if (el) {
+      el.innerHTML = suggestions.map(s =>
+        `<div class="suggestion-item">${s}</div>`
+      ).join('');
+    }
+  }
+
+  // =================== BURNOUT DETECTION ===================
+  function renderBurnoutAlert() {
+    const burnout = AIScheduler.detectBurnout(S.schedule, S.goals);
+    let el = document.getElementById('burnoutAlert');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'burnoutAlert';
+      const panel = document.getElementById('analyticsMiniPanel');
+      if (panel) panel.parentNode.insertBefore(el, panel);
+    }
+    if (burnout.isBurnout || burnout.warnings.length > 0) {
+      const levelClass = burnout.level === 'high' ? 'burnout-high' : burnout.level === 'moderate' ? 'burnout-moderate' : '';
+      el.className = `burnout-alert ${levelClass}`;
+      el.innerHTML = `
+        <div class="burnout-header">
+          <span class="burnout-icon">${burnout.level === 'high' ? '🔥' : burnout.level === 'moderate' ? '⚠️' : '💡'}</span>
+          <span class="burnout-title">${burnout.level === 'high' ? 'High Burnout Risk' : burnout.level === 'moderate' ? 'Moderate Burnout Risk' : 'Workload Check'}</span>
+          <button class="burnout-dismiss" onclick="this.closest('.burnout-alert').style.display='none'">✕</button>
+        </div>
+        <div class="burnout-body">
+          ${burnout.warnings.map(w => `<div class="burnout-warning">${w}</div>`).join('')}
+          ${burnout.suggestions.map(s => `<div class="burnout-suggestion">💡 ${s}</div>`).join('')}
+        </div>
+      `;
+      el.style.display = '';
+    } else {
+      if (el) el.style.display = 'none';
+    }
+  }
+
+  // =================== STREAK DISPLAY ===================
+  function renderStreakDisplay() {
+    const el = document.getElementById('streakDisplay');
+    if (!el) return;
+    const milestones = [3, 7, 14, 30, 60, 100];
+    const next = milestones.find(m => m > S.streak) || S.streak + 10;
+    const pct = Math.min(Math.round(S.streak / next * 100), 100);
+    const isHot = S.streak >= 7;
+    el.innerHTML = `
+      <div class="streak-visual ${isHot ? 'streak-hot' : ''}">
+        <div class="streak-flame">${S.streak >= 7 ? '🔥' : S.streak >= 3 ? '⚡' : '💫'}</div>
+        <div class="streak-count">${S.streak}</div>
+        <div class="streak-label">Day Streak</div>
+        <div class="streak-bar"><div class="streak-bar-fill" style="width:${pct}%"></div></div>
+        <div class="streak-next">Next milestone: ${next} days</div>
+      </div>
+    `;
+  }
+
+  // =================== DAY RECOVERY MODE ===================
+  function recoverDayMode() {
+    if (!S.schedule.length) { toast('No schedule to recover!', 'error'); return; }
+    const incomplete = S.schedule.filter(t => !t.isBreak && !S.scheduleCompleted[t.id]);
+    if (incomplete.length === 0) { toast('✅ All tasks completed! Nothing to recover.', 'success'); return; }
+    S.schedule = AIScheduler.recoverDay(S.schedule, S.scheduleCompleted);
+    const recoveredCount = S.schedule.filter(t => t.recovered).length;
+    S.scheduledDates[today()] = S.schedule;
+    save();
+    toast(`🔄 Day recovery: ${recoveredCount} task(s) rescheduled into remaining time!`, 'success');
+    renderSchedule(); renderDashboard();
+  }
+
+  // =================== AI COACH ===================
+  const coachHistory = [];
+  function processCoachMessage(input) {
+    const msg = input.trim().toLowerCase();
+    if (!msg) return;
+    coachHistory.push({ role: 'user', text: input.trim() });
+    let reply = '';
+
+    if (msg.includes('plan my day') || msg.includes('generate schedule') || msg.includes('create schedule')) {
+      generateSchedule();
+      reply = '📅 Done! I\'ve generated a smart schedule based on your goals. Check the AI Schedule tab!';
+    } else if (msg.includes('missed task') || msg.includes('reschedule') || msg.includes('missed tasks')) {
+      rescheduleMissed();
+      reply = '🔄 I\'ve checked for missed tasks and rescheduled them. Your timeline is updated!';
+    } else if (msg.includes('recover') || msg.includes('recovery mode') || msg.includes('fix my day')) {
+      recoverDayMode();
+      reply = '🔧 Day Recovery activated! All incomplete tasks have been rescheduled into the remaining time.';
+    } else if (msg.includes('burnout') || msg.includes('am i overworked') || msg.includes('too much')) {
+      const b = AIScheduler.detectBurnout(S.schedule, S.goals);
+      if (b.isBurnout) {
+        reply = `⚠️ Burnout detected (${b.level} risk)!\n${b.warnings.join('\n')}\n\n💡 ${b.suggestions.join('\n💡 ')}`;
+      } else {
+        reply = '✅ Your workload looks balanced. No burnout risk detected. Keep it up!';
+      }
+    } else if (msg.includes('streak') || msg.includes('how am i doing')) {
+      reply = `🔥 Your current streak is ${S.streak} day(s)! Best ever: ${S.bestStreak} days. ${S.streak >= 7 ? 'You\'re on fire! 🔥' : S.streak >= 3 ? 'Nice momentum! ⚡' : 'Keep going! 💪'}`;
+    } else if (msg.includes('focus') || msg.includes('pomodoro') || msg.includes('timer')) {
+      reply = '🎯 Use the Focus button on any scheduled task for a 25-min focused session, or try the Pomodoro timer!';
+    } else if (msg.includes('how many') || msg.includes('stats') || msg.includes('analytics') || msg.includes('progress')) {
+      const done = S.goals.filter(g => g.completed).length;
+      const total = S.goals.length;
+      const pct = total > 0 ? Math.round(done / total * 100) : 0;
+      reply = `📊 Progress: ${done}/${total} goals completed (${pct}%). Focus time: ${S.pomo.totalMin}min. Streak: ${S.streak} days.`;
+    } else if (msg.includes('suggest') || msg.includes('what should i do') || msg.includes('advice')) {
+      const sug = AIScheduler.getSuggestions({ goals: S.goals, completedCount: S.goals.filter(g => g.completed).length, totalCount: S.goals.length, focusMinutes: S.pomo.totalMin, habits: S.habits });
+      reply = '💡 Here\'s my suggestion:\n' + sug.join('\n');
+    } else if (msg.includes('help') || msg.includes('what can you do')) {
+      reply = '🤖 I can help with:\n• "plan my day" — generate a schedule\n• "missed tasks" — reschedule missed tasks\n• "recover my day" — day recovery mode\n• "burnout check" — detect overwork\n• "how am I doing" — show stats\n• "streak" — check your streak\n• "suggest" — get smart suggestions\n• "focus" — focus timer tips';
+    } else {
+      const greetings = ['hi', 'hello', 'hey', 'yo', 'sup'];
+      if (greetings.some(g => msg.includes(g))) {
+        reply = `👋 Hey there! I'm your AI Coach. How can I help? Type "help" to see what I can do!`;
+      } else {
+        reply = `🤖 I'm not sure about that. Try "help" to see what I can assist with!`;
+      }
+    }
+
+    coachHistory.push({ role: 'coach', text: reply });
+    renderCoachMessages();
+    return reply;
+  }
+
+  function renderCoachMessages() {
+    const el = document.getElementById('coachMessages');
+    if (!el) return;
+    el.innerHTML = coachHistory.slice(-20).map(m => {
+      if (m.role === 'user') {
+        return `<div class="coach-msg coach-msg-user"><div class="coach-bubble coach-bubble-user">${m.text}</div></div>`;
+      } else {
+        return `<div class="coach-msg coach-msg-bot"><div class="coach-avatar">🤖</div><div class="coach-bubble coach-bubble-bot">${m.text.replace(/\n/g, '<br>')}</div></div>`;
+      }
+    }).join('');
+    el.scrollTop = el.scrollHeight;
+  }
+
+  function sendCoachMessage() {
+    const input = document.getElementById('coachInput');
+    if (!input || !input.value.trim()) return;
+    processCoachMessage(input.value);
+    input.value = '';
+  }
+
+  function toggleCoachBox() {
+    const box = document.getElementById('coachBox');
+    if (!box) return;
+    box.classList.toggle('coach-open');
+    if (box.classList.contains('coach-open') && coachHistory.length === 0) {
+      coachHistory.push({ role: 'coach', text: '👋 Hi! I\'m your AI Coach. I can help plan your day, reschedule missed tasks, check burnout, and more. Type "help" to see all commands!' });
+      renderCoachMessages();
+    }
   }
 
   // =================== GOALS ===================
-  function addGoal(title, duration, priority, category, urgent, recurrence, notes) {
+  function addGoal(title, duration, priority, category, urgent, recurrence, notes, difficulty) {
+    const diff = difficulty || 'medium';
+    // Auto-assign duration from difficulty if user didn't specify a custom one
+    const autoDur = AIScheduler.DIFFICULTY_DURATION[diff] || 30;
+    const finalDur = parseInt(duration) || autoDur;
     const g = {
-      id: genId(), title, duration: parseInt(duration), priority, category: category || 'work',
+      id: genId(), title, duration: finalDur, priority, category: category || 'work',
+      difficulty: diff,
       urgent: urgent === 'true' || urgent === true, recurrence: recurrence || 'none', notes: notes || '',
       subtasks: [], completed: false, createdAt: new Date().toISOString()
     };
@@ -388,6 +581,7 @@ const app = (() => {
           <div class="goal-meta">
             <span class="badge badge-priority-${g.priority}">${g.priority.toUpperCase()}</span>
             <span class="badge badge-${g.category}">${AIScheduler.CATEGORY_EMOJI[g.category] || '📋'} ${g.category}</span>
+            ${g.difficulty ? `<span class="badge badge-difficulty-${g.difficulty}">${{easy:'🟢',medium:'🟡',hard:'🔴'}[g.difficulty]} ${g.difficulty}</span>` : ''}
             ${g.urgent ? '<span class="badge badge-urgent">⚡ URGENT</span>' : ''}
             <span class="goal-duration">⏱️ ${durLabel(g.duration)}</span>
           </div>
@@ -458,21 +652,37 @@ const app = (() => {
   function generateSchedule() {
     const active = S.goals.filter(g => !g.completed);
     if (!active.length) { toast('Add goals first!', 'error'); return }
-    S.schedule = AIScheduler.generateSchedule(active);
+    const peakSel = document.getElementById('peakHoursSelect');
+    const peakHours = peakSel ? peakSel.value : 'morning';
+    S.schedule = AIScheduler.generateSmartSchedule(active, { peakHours });
     S.scheduleCompleted = {}; S.scheduledDates[today()] = S.schedule;
-    save(); toast('AI schedule generated! 🚀', 'success'); renderSchedule(); renderDashboard();
+    save(); toast('AI smart schedule generated! 🚀', 'success'); renderSchedule(); renderDashboard();
   }
   function renderSchedule() {
     const emp = document.getElementById('scheduleEmpty'), tl = document.getElementById('timeline');
-    const icsBtn = document.getElementById('exportIcsBtn'), shareBtn = document.getElementById('shareScheduleBtn');
-    if (!S.schedule.length) { emp.style.display = ''; tl.style.display = 'none'; if (icsBtn) icsBtn.style.display = 'none'; if (shareBtn) shareBtn.style.display = 'none'; return }
-    emp.style.display = 'none'; tl.style.display = ''; if (icsBtn) icsBtn.style.display = ''; if (shareBtn) shareBtn.style.display = '';
+    const icsBtn = document.getElementById('exportIcsBtn'), shareBtn = document.getElementById('shareScheduleBtn'), rescBtn = document.getElementById('rescheduleBtn');
+    if (!S.schedule.length) { emp.style.display = ''; tl.style.display = 'none'; if (icsBtn) icsBtn.style.display = 'none'; if (shareBtn) shareBtn.style.display = 'none'; if (rescBtn) rescBtn.style.display = 'none'; return }
+    emp.style.display = 'none'; tl.style.display = ''; if (icsBtn) icsBtn.style.display = ''; if (shareBtn) shareBtn.style.display = ''; if (rescBtn) rescBtn.style.display = '';
     tl.innerHTML = S.schedule.map((it, i) => {
       const done = S.scheduleCompleted[it.id], cat = it.isBreak ? 'is-break' : `cat-${it.category || 'work'}`, dc = done ? 'task-completed' : '';
-      return `<div class="timeline-item" style="animation-delay:${i * 60}ms"><div class="timeline-time">${it.startFormatted}</div><div class="timeline-dot" style="${it.isBreak ? 'background:var(--text-tertiary);box-shadow:none' : ''}"></div>
-        <div class="timeline-content ${cat} ${dc}"><div class="task-info"><div class="task-title">${it.categoryEmoji || ''} ${it.title}</div><div class="task-duration">${it.startFormatted} – ${it.endFormatted} · ${durLabel(it.duration)}</div></div>
-        ${!it.isBreak ? `<button class="timeline-done-check ${done ? 'checked' : ''}" onclick="app.toggleScheduleComplete('${it.id}')">${done ? '✓' : ''}</button>` : ''}</div></div>`;
+      const rescheduledBadge = it.rescheduled ? '<span class="badge badge-rescheduled">🔄 Rescheduled</span>' : '';
+      const focusBtnHtml = !it.isBreak && !done ? `<button class="btn btn-sm btn-focus-task" onclick="app.startTaskFocus('${it.id}','${it.title.replace(/'/g, "\\'")}')">🎯 Focus</button>` : '';
+      return `<div class="timeline-item ${dc}" style="animation-delay:${i * 60}ms" draggable="${!it.isBreak}" data-schedule-id="${it.id}" data-schedule-idx="${i}">
+        <div class="timeline-time">${it.startFormatted}</div>
+        <div class="timeline-dot" style="${it.isBreak ? 'background:var(--text-tertiary);box-shadow:none' : ''}"></div>
+        <div class="timeline-content ${cat} ${dc}">
+          <div class="task-info">
+            <div class="task-title">${it.categoryEmoji || ''} ${it.title} ${rescheduledBadge}</div>
+            <div class="task-duration">${it.startFormatted} – ${it.endFormatted} · ${durLabel(it.duration)}</div>
+          </div>
+          <div class="timeline-actions">
+            ${focusBtnHtml}
+            ${!it.isBreak ? `<button class="timeline-done-check ${done ? 'checked' : ''}" onclick="app.toggleScheduleComplete('${it.id}')">${done ? '✓' : ''}</button>` : ''}
+          </div>
+        </div>
+      </div>`;
     }).join('');
+    setupScheduleDragDrop();
   }
   function toggleScheduleComplete(id) {
     S.scheduleCompleted[id] = !S.scheduleCompleted[id];
@@ -493,6 +703,179 @@ const app = (() => {
       navigator.clipboard.writeText(text).then(() => toast('Schedule copied!', 'success')).catch(() => {
         const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); toast('Copied!', 'success');
       })
+    }
+  }
+
+  // =================== AUTO RESCHEDULE ===================
+  function rescheduleMissed() {
+    if (!S.schedule.length) { toast('No schedule to reschedule!', 'error'); return; }
+    const before = S.schedule.length;
+    S.schedule = AIScheduler.rescheduleTasks(S.schedule, S.scheduleCompleted);
+    const rescheduledCount = S.schedule.filter(t => t.rescheduled).length;
+    if (rescheduledCount > 0) {
+      S.scheduledDates[today()] = S.schedule;
+      save();
+      toast(`🔄 ${rescheduledCount} missed task(s) rescheduled!`, 'success');
+    } else {
+      toast('✅ No missed tasks to reschedule!', 'info');
+    }
+    renderSchedule(); renderDashboard();
+  }
+
+  // =================== SCHEDULE DRAG & DROP ===================
+  let draggedScheduleId = null;
+  function setupScheduleDragDrop() {
+    const tl = document.getElementById('timeline');
+    if (!tl) return;
+    const items = tl.querySelectorAll('.timeline-item[draggable="true"]');
+    items.forEach(item => {
+      item.addEventListener('dragstart', e => {
+        draggedScheduleId = item.dataset.scheduleId;
+        item.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', draggedScheduleId);
+      });
+      item.addEventListener('dragend', () => {
+        item.classList.remove('dragging');
+        tl.querySelectorAll('.timeline-item').forEach(el => el.classList.remove('drag-over-above', 'drag-over-below'));
+        draggedScheduleId = null;
+      });
+      item.addEventListener('dragover', e => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        const rect = item.getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+        tl.querySelectorAll('.timeline-item').forEach(el => el.classList.remove('drag-over-above', 'drag-over-below'));
+        if (e.clientY < midY) item.classList.add('drag-over-above');
+        else item.classList.add('drag-over-below');
+      });
+      item.addEventListener('dragleave', () => {
+        item.classList.remove('drag-over-above', 'drag-over-below');
+      });
+      item.addEventListener('drop', e => {
+        e.preventDefault();
+        item.classList.remove('drag-over-above', 'drag-over-below');
+        const fromId = e.dataTransfer.getData('text/plain') || draggedScheduleId;
+        const toId = item.dataset.scheduleId;
+        if (!fromId || fromId === toId) return;
+        const fromIdx = S.schedule.findIndex(t => t.id === fromId);
+        const toIdx = S.schedule.findIndex(t => t.id === toId);
+        if (fromIdx < 0 || toIdx < 0) return;
+        // Move task
+        const [moved] = S.schedule.splice(fromIdx, 1);
+        const rect = item.getBoundingClientRect();
+        const insertIdx = e.clientY < rect.top + rect.height / 2 ? toIdx : toIdx + 1;
+        S.schedule.splice(insertIdx > fromIdx ? insertIdx - 1 : insertIdx, 0, moved);
+        // Recalculate times
+        S.schedule = AIScheduler.recalcTimesAfterReorder(S.schedule);
+        S.scheduledDates[today()] = S.schedule;
+        save();
+        toast('📋 Schedule reordered!', 'success');
+        renderSchedule(); renderDashboard();
+      });
+    });
+  }
+
+  // =================== PER-TASK FOCUS TIMER ===================
+  function startTaskFocus(taskId, taskTitle) {
+    // Stop any existing timer
+    if (S.focusTimer.interval) clearInterval(S.focusTimer.interval);
+    S.focusTimer.taskId = taskId;
+    S.focusTimer.taskTitle = taskTitle;
+    S.focusTimer.timeLeft = 25 * 60; // 25 minutes
+    S.focusTimer.running = true;
+    showTaskFocusOverlay();
+    S.focusTimer.interval = setInterval(() => {
+      S.focusTimer.timeLeft--;
+      updateTaskFocusDisplay();
+      if (S.focusTimer.timeLeft <= 0) {
+        stopTaskFocus();
+        playSound('timer');
+        toast(`🎯 Focus session for "${S.focusTimer.taskTitle}" complete!`, 'success');
+        awardXP(20, taskTitle);
+        // Auto-complete the task in schedule
+        S.scheduleCompleted[taskId] = true;
+        save(); renderSchedule(); renderDashboard();
+        if (S.notificationsEnabled && 'Notification' in window && Notification.permission === 'granted') {
+          new Notification('🎯 Focus Complete!', { body: `Great work on "${taskTitle}"!` });
+        }
+      }
+    }, 1000);
+  }
+  function stopTaskFocus() {
+    if (S.focusTimer.interval) clearInterval(S.focusTimer.interval);
+    S.focusTimer.running = false;
+    S.focusTimer.interval = null;
+  }
+  function closeTaskFocus() {
+    stopTaskFocus();
+    const overlay = document.getElementById('taskFocusOverlay');
+    if (overlay) overlay.style.display = 'none';
+    document.body.style.overflow = '';
+  }
+  function toggleTaskFocusPause() {
+    if (!S.focusTimer.taskId) return;
+    if (S.focusTimer.running) {
+      stopTaskFocus();
+      const btn = document.getElementById('taskFocusPauseBtn');
+      if (btn) btn.textContent = '▶ Resume';
+    } else {
+      S.focusTimer.running = true;
+      S.focusTimer.interval = setInterval(() => {
+        S.focusTimer.timeLeft--;
+        updateTaskFocusDisplay();
+        if (S.focusTimer.timeLeft <= 0) {
+          stopTaskFocus();
+          playSound('timer');
+          toast(`🎯 Focus session for "${S.focusTimer.taskTitle}" complete!`, 'success');
+          awardXP(20, S.focusTimer.taskTitle);
+          S.scheduleCompleted[S.focusTimer.taskId] = true;
+          save(); renderSchedule(); renderDashboard();
+          closeTaskFocus();
+        }
+      }, 1000);
+      const btn = document.getElementById('taskFocusPauseBtn');
+      if (btn) btn.textContent = '⏸ Pause';
+    }
+  }
+  function showTaskFocusOverlay() {
+    let overlay = document.getElementById('taskFocusOverlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'taskFocusOverlay';
+      overlay.className = 'task-focus-overlay';
+      document.body.appendChild(overlay);
+    }
+    overlay.innerHTML = `
+      <button class="focus-exit-btn" onclick="app.closeTaskFocus()">✕ Exit</button>
+      <div class="task-focus-content">
+        <div class="task-focus-label">🎯 Focus: ${S.focusTimer.taskTitle}</div>
+        <div class="task-focus-ring">
+          <svg viewBox="0 0 260 260"><circle class="pomo-bg" cx="130" cy="130" r="120"/><circle class="task-focus-fill" id="taskFocusRing" cx="130" cy="130" r="120" stroke-dasharray="754" stroke-dashoffset="0"/></svg>
+          <div class="task-focus-time" id="taskFocusTime">25:00</div>
+        </div>
+        <div class="task-focus-controls">
+          <button class="btn btn-primary btn-lg" id="taskFocusPauseBtn" onclick="app.toggleTaskFocusPause()">⏸ Pause</button>
+          <button class="btn btn-outline btn-lg" onclick="app.closeTaskFocus()">⏹ Stop</button>
+        </div>
+      </div>
+    `;
+    overlay.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    updateTaskFocusDisplay();
+  }
+  function updateTaskFocusDisplay() {
+    const el = document.getElementById('taskFocusTime');
+    const ring = document.getElementById('taskFocusRing');
+    if (!el) return;
+    const m = Math.floor(S.focusTimer.timeLeft / 60);
+    const s = S.focusTimer.timeLeft % 60;
+    el.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    if (ring) {
+      const total = 25 * 60;
+      const pct = (total - S.focusTimer.timeLeft) / total;
+      const circ = 2 * Math.PI * 120;
+      ring.setAttribute('stroke-dashoffset', circ - (circ * pct));
     }
   }
 
@@ -1053,6 +1436,15 @@ const app = (() => {
       document.documentElement.style.setProperty('--mouse-y', `${e.clientY}px`);
     });
 
+    // Premium Floating Light Effect
+    document.querySelectorAll(".premium-card").forEach(card => {
+      card.addEventListener("mousemove", e => {
+        const rect = card.getBoundingClientRect();
+        card.style.setProperty("--x", `${e.clientX - rect.left}px`);
+        card.style.setProperty("--y", `${e.clientY - rect.top}px`);
+      });
+    });
+
     initCommandPalette();
 
     load();
@@ -1081,17 +1473,34 @@ const app = (() => {
       }
     });
 
-    // Goal form
+    // Goal form - priority
     document.querySelectorAll('#prioritySelector .priority-btn').forEach(b => b.addEventListener('click', () => {
       document.querySelectorAll('#prioritySelector .priority-btn').forEach(x => x.classList.remove('active'));
       b.classList.add('active'); S.selPriority = b.dataset.priority;
+    }));
+    // Goal form - difficulty
+    document.querySelectorAll('#difficultySelector .difficulty-btn').forEach(b => b.addEventListener('click', () => {
+      document.querySelectorAll('#difficultySelector .difficulty-btn').forEach(x => x.classList.remove('active'));
+      b.classList.add('active'); S.selDifficulty = b.dataset.difficulty;
+      // Update auto-duration hint
+      const hint = document.getElementById('difficultyHint');
+      const autoDur = AIScheduler.DIFFICULTY_DURATION[b.dataset.difficulty] || 30;
+      if (hint) hint.textContent = `\u23f1\ufe0f Auto: ${autoDur} min`;
+      // Auto-set duration dropdown
+      const durSel = document.getElementById('goalDuration');
+      if (durSel) {
+        const closest = [...durSel.options].reduce((best, opt) => 
+          Math.abs(parseInt(opt.value) - autoDur) < Math.abs(parseInt(best.value) - autoDur) ? opt : best
+        );
+        durSel.value = closest.value;
+      }
     }));
     document.getElementById('goalForm').addEventListener('submit', e => {
       e.preventDefault(); const t = document.getElementById('goalTitle');
       if (t.value.trim()) {
         addGoal(t.value.trim(), document.getElementById('goalDuration').value, S.selPriority,
           document.getElementById('goalCategory').value, document.getElementById('goalUrgent').value,
-          document.getElementById('goalRecurrence').value, document.getElementById('goalNotes').value);
+          document.getElementById('goalRecurrence').value, document.getElementById('goalNotes').value, S.selDifficulty);
         t.value = ''; document.getElementById('goalNotes').value = ''; toggleGoalForm();
       }
     });
@@ -1108,8 +1517,9 @@ const app = (() => {
     // Keyboard
     document.addEventListener('keydown', handleKeyboard);
 
-    // Drag & Drop
+    // Drag & Drop (goals board)
     setTimeout(setupDragDrop, 500);
+    // Schedule drag & drop is set up inside renderSchedule()
 
     // PWA
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
@@ -1145,14 +1555,17 @@ const app = (() => {
     init, switchView,
     addGoal, deleteGoal, toggleGoalComplete, toggleGoalForm, toggleGoalExpand, cycleGoalView, toggleMatrixView,
     addSubtask, toggleSubtask, dragStart,
-    generateSchedule, toggleScheduleComplete, exportICS, shareSchedule,
+    generateSchedule, toggleScheduleComplete, exportICS, shareSchedule, rescheduleMissed,
+    recoverDayMode,
     addHabit, deleteHabit, toggleHabitToday, toggleHabitForm,
     showDayDetail, changeMonth,
     pomoToggle, pomoReset,
     showShortcuts, closeShortcuts,
     toggleTheme, exportData, handleImport,
     toggleFocusMode, enterFocusMode, exitFocusMode, toggleFocusAmbient,
-    requestNotifications, signInWithGoogle, signOut
+    requestNotifications, signInWithGoogle, signOut,
+    startTaskFocus, closeTaskFocus, toggleTaskFocusPause,
+    sendCoachMessage, toggleCoachBox
   };
 })();
 
