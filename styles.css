@@ -3832,6 +3832,20 @@ input[type="text"]:focus, input[type="number"]:focus, select:focus, textarea:foc
    MOBILE RESPONSIVENESS & FLUID LAYOUT
    ============================================ */
 @media (max-width: 768px) {
+  /* Strict bounding limits to prevent horizontal scroll breaking */
+  html, body {
+    width: 100%;
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+  
+  .app-container, .main-content {
+    width: 100%;
+    max-width: 100vw;
+    overflow-x: hidden;
+    box-sizing: border-box;
+  }
+
   /* Collapse all major content grids to single column */
   .dashboard-grid,
   .stats-grid,
@@ -3840,11 +3854,16 @@ input[type="text"]:focus, input[type="number"]:focus, select:focus, textarea:foc
   .insights-grid {
     grid-template-columns: 1fr !important;
     gap: 16px;
+    width: 100%;
+    max-width: 100vw;
+    box-sizing: border-box;
   }
 
   /* Compress padding to save screen real estate */
   .card, .premium-card {
     padding: 16px;
+    width: 100%;
+    box-sizing: border-box;
   }
   
   .view {
