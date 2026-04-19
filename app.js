@@ -143,6 +143,19 @@ const app = (() => {
     { t: "Your only limit is your mind.", a: "Anonymous" }
   ];
 
+  const QUOTE_BGS = [
+    'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&q=80&w=1000', // Mountains
+    'https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&q=80&w=1000', // Lake
+    'https://images.unsplash.com/photo-1472214103451-9374bd1c798e?auto=format&fit=crop&q=80&w=1000', // Nature
+    'https://images.unsplash.com/photo-1493246507139-91e8bef99c02?auto=format&fit=crop&q=80&w=1000', // Peaks
+    'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&q=80&w=1000', // Valley
+    'https://images.unsplash.com/photo-1434725039720-abb26e22ebe8?auto=format&fit=crop&q=80&w=1000', // Green field
+    'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&q=80&w=1000', // Forest
+    'https://images.unsplash.com/photo-1518091043644-c1d445bcc97a?auto=format&fit=crop&q=80&w=1000', // Space/Sky
+    'https://images.unsplash.com/photo-1470770841072-f978cf4d019e?auto=format&fit=crop&q=80&w=1000', // Coastal
+    'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&q=80&w=1000'  // Sunlit forest
+  ];
+
   // =================== HELPERS ===================
   const genId = () => 'id_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
   const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` };
@@ -652,7 +665,11 @@ const app = (() => {
 
     // Daily quote using day-of-year for true daily rotation
     const qi = dayOfYear() % QUOTES.length;
-    document.getElementById('dailyQuote').textContent = `"${QUOTES[qi].t}"`;
+    const bgi = dayOfYear() % QUOTE_BGS.length;
+    const quoteEl = document.getElementById('dailyQuote');
+    const quoteCard = quoteEl ? quoteEl.closest('.motivational') : null;
+    if (quoteCard) quoteCard.style.backgroundImage = `url('${QUOTE_BGS[bgi]}')`;
+    if (quoteEl) quoteEl.textContent = `"${QUOTES[qi].t}"`;
     document.getElementById('quoteAuthor').textContent = `— ${QUOTES[qi].a}`;
 
     // Schedule preview
