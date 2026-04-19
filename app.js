@@ -25,7 +25,8 @@ const app = (() => {
     focusTimer: { taskId: null, taskTitle: '', running: false, timeLeft: 25 * 60, interval: null },
     orchestration: { lastCheck: null, modalOpen: false, ignoreToday: false },
     raid: { active: false, boss: null, personalDamage: 0, leaderboard: [], activity: [] },
-    github: { token: '', repo: '', lastSync: null }
+    github: { token: '', repo: '', lastSync: null },
+    equippedGear: { head: null, weapon: null, chest: null }
   };
   let pomoInterval = null;
   const ambientState = { ctx: null, source: null, gain: null, type: null };
@@ -92,8 +93,11 @@ const app = (() => {
   const SHOP_ITEMS = [
     { id: 'FERTILIZER', title: '🌿 Magic Fertilizer', desc: 'Boosts XP gain by 50% for 24 hours.', price: 50, type: 'buff', effect: { xpMultiplier: 1.5 }, icon: '🧪' },
     { id: 'GOLDEN_SCYTHE', title: '🌾 Golden Scythe', desc: 'Earn 25% more Gold from quests.', price: 100, type: 'buff', effect: { goldMultiplier: 1.25 }, icon: '⚔️' },
-    { id: 'ZEN_INCENSE', title: '🕯️ Zen Incense', desc: 'Doubles Gold rewards from Zen mode.', price: 75, type: 'buff', effect: { zenMultiplier: 2.0 }, icon: '🧘' },
-    { id: 'CYBER_CORE', title: '💾 Cyber Core', desc: 'Unlocks the "Neon City" focus scene.', price: 150, type: 'scene', effect: 'scene_cyber', icon: '⚡' }
+    { id: 'CYBER_CORE', title: '⚡ Cyber Core', desc: 'Unlocks the "Neon City" focus scene.', price: 150, type: 'scene', effect: 'scene_cyber', icon: '⚡' },
+    // Legendary Gear
+    { id: 'FOCUS_HELM', title: '🪖 Helm of Focus', desc: 'Permanent +10% XP gain from all tasks.', price: 500, type: 'gear', slot: 'head', effect: { xpMultiplier: 1.1 }, icon: '🪖' },
+    { id: 'AMBITION_BLADE', title: '🗡️ Blade of Ambition', desc: 'Permanent +15% Gold gain from quests.', price: 750, type: 'gear', slot: 'weapon', effect: { goldMultiplier: 1.15 }, icon: '🗡️' },
+    { id: 'HASTE_BOOTS', title: ' 👢 Boots of Haste', desc: 'Slightly higher XP from Pomodoro sessions.', price: 400, type: 'gear', slot: 'feet', effect: { pomoMultiplier: 1.2 }, icon: '👢' }
   ];
 
   const SCENES = [
@@ -654,6 +658,7 @@ const app = (() => {
     // Schedule preview
     const tl = document.getElementById('dashboardTimeline');
     if (S.schedule.length) {
+      renderHeroStats();
       tl.innerHTML = S.schedule.slice(0, 6).map(it => {
         const cc = S.scheduleCompleted[it.id] ? 'completed' : '';
         const bc = it.isBreak ? 'break' : '';
@@ -809,21 +814,27 @@ const app = (() => {
   // =================== GOLD SHOP ===================
   function renderShop() {
     const el = document.getElementById('shopGrid');
+    const userGold = document.getElementById('userGold'); // Update gold in header too
     if (!el) return;
+    if (userGold) userGold.textContent = S.gold;
+
     el.innerHTML = SHOP_ITEMS.map(item => {
       const isOwned = S.inventory.includes(item.id);
+      const isEquipped = Object.values(S.equippedGear || {}).some(g => g?.id === item.id);
       const canAfford = S.gold >= item.price;
+      
       return `
-        <div class="shop-card ${isOwned ? 'owned' : ''}">
+        <div class="shop-card ${isOwned ? 'owned' : ''} ${item.type === 'gear' ? 'legendary-gear' : ''}">
+          <div class="shop-item-type" style="font-size:8px; font-weight:800; color:var(--primary); margin-bottom:5px;">${item.type.toUpperCase()}</div>
           <div class="shop-item-icon">${item.icon}</div>
           <div class="shop-item-info">
-            <div class="shop-item-title">${item.title}</div>
-            <div class="shop-item-desc">${item.desc}</div>
-            <div class="shop-item-price">🪙 ${item.price} Gold</div>
+            <div class="shop-item-title" style="font-weight:700;">${item.title}</div>
+            <div class="shop-item-desc" style="font-size:11px; opacity:0.7;">${item.desc}</div>
+            <div class="shop-item-price" style="color:#fbbf24; font-weight:700; margin:5px 0;">🪙 ${item.price}</div>
           </div>
           <button class="btn ${isOwned ? 'btn-outline' : canAfford ? 'btn-primary' : 'btn-disabled'}" 
             onclick="app.buyItem('${item.id}')" ${isOwned || !canAfford ? 'disabled' : ''}>
-            ${isOwned ? 'Purchased' : 'Buy Now'}
+            ${isEquipped ? 'EQUIPPED' : isOwned ? 'OWNED' : 'Buy Now'}
           </button>
         </div>
       `;
@@ -845,6 +856,9 @@ const app = (() => {
       const scene = SCENES.find(s => s.id === sceneId);
       if (scene) scene.locked = false;
       toast(`🌌 Focus Scene unlocked!`, 'success');
+    } else if (item.type === 'gear') {
+      S.equippedGear[item.slot] = item;
+      toast(`⚔️ Equipped ${item.title} to ${item.slot}!`, 'success');
     }
 
     playSound('level');
@@ -1059,8 +1073,9 @@ const app = (() => {
   }
 
   function awardGold(amount, reason = "") {
-    const multiplier = S.activeBuffs.goldMultiplier || 1;
-    const finalAmount = Math.round(amount * multiplier);
+    const buffMult = S.activeBuffs.goldMultiplier || 1;
+    const gearMult = Object.values(S.equippedGear || {}).reduce((acc, g) => acc * (g?.effect?.goldMultiplier || 1), 1);
+    const finalAmount = Math.round(amount * buffMult * gearMult);
     S.gold += finalAmount;
     S.analytics.totalGoldEarned = (S.analytics.totalGoldEarned || 0) + finalAmount;
     const el = document.getElementById('userGold');
@@ -1110,9 +1125,22 @@ const app = (() => {
             ${g.urgent ? '<span class="badge badge-urgent">⚡ URGENT</span>' : ''}
             <span class="goal-duration">⏱️ ${durLabel(g.duration)}</span>
           </div>
+          </div>
           ${g.notes && exp ? `<div style="margin-top:5px;font-size:11px;color:var(--text-secondary);padding:5px 8px;background:var(--bg-surface);border-radius:var(--radius-sm)">${g.notes}</div>` : ''}
+          ${g.aiDraft && exp ? `
+            <div class="ai-draft-blueprint">
+              <div class="blueprint-label">💎 AI BLUEPRINT</div>
+              <ul class="blueprint-steps">
+                ${g.aiDraft.steps.map(s => `<li>${s}</li>`).join('')}
+              </ul>
+              <div class="blueprint-tip">💡 Tip: ${g.aiDraft.tip}</div>
+            </div>
+          ` : ''}
         </div>
-        <span class="goal-expand-btn" onclick="app.toggleGoalExpand('${g.id}')">${exp ? '▲' : '▼'}</span>
+        <div class="goal-actions-row">
+          ${!g.completed && !g.aiDraft ? `<button class="btn btn-sm btn-ghost btn-draft" onclick="event.stopPropagation(); app.generateAIDraft('${g.id}')">✨ Draft</button>` : ''}
+          <span class="goal-expand-btn" onclick="app.toggleGoalExpand('${g.id}')">${exp ? '▲' : '▼'}</span>
+        </div>
         <div class="goal-actions">
           <button class="btn btn-sm btn-danger" onclick="app.deleteGoal('${g.id}')">🗑️</button>
         </div>
@@ -1126,7 +1154,14 @@ const app = (() => {
   }
 
   function renderGoalsBoard() {
-    const render = gs => gs.length ? gs.map(g => `<div class="board-card" draggable="true" ondragstart="app.dragStart(event,'${g.id}')"><div class="card-title">${g.title}</div><div class="card-meta"><span class="badge badge-${g.category}" style="font-size:9px">${AIScheduler.CATEGORY_EMOJI[g.category]} ${g.category}</span><span style="font-size:10px;color:var(--text-secondary)">⏱️${durLabel(g.duration)}</span></div></div>`).join('') : '<div style="text-align:center;color:var(--text-tertiary);font-size:11px;padding:14px">No goals</div>';
+    const render = gs => gs.length ? gs.map(g => `
+      <div class="board-card" draggable="true" ondragstart="app.dragStart(event,'${g.id}')">
+        <div class="card-title">${g.title}</div>
+        <div class="card-meta">
+          <span class="badge badge-${g.category}" style="font-size:9px">${AIScheduler.CATEGORY_EMOJI[g.category]} ${g.category}</span>
+          ${g.aiDraft ? '<span class="badge badge-draft-active" style="font-size:8px">✨ DRAFT</span>' : ''}
+        </div>
+      </div>`).join('') : '<div style="text-align:center;color:var(--text-tertiary);font-size:11px;padding:14px">No goals</div>';
     document.getElementById('boardHigh').innerHTML = render(S.goals.filter(g => g.priority === 'high'));
     document.getElementById('boardMedium').innerHTML = render(S.goals.filter(g => g.priority === 'medium'));
     document.getElementById('boardLow').innerHTML = render(S.goals.filter(g => g.priority === 'low'));
@@ -1402,6 +1437,24 @@ const app = (() => {
       const pct = (total - S.focusTimer.timeLeft) / total;
       const circ = 2 * Math.PI * 120;
       ring.setAttribute('stroke-dashoffset', circ - (circ * pct));
+    }
+  }
+
+  async function generateAIDraft(goalId) {
+    const g = S.goals.find(x => x.id === goalId);
+    if (!g || g.aiDraft) return;
+
+    toast('AI is drafting your quest steps...', 'info');
+    try {
+      const prompt = `Task: "${g.title}". Role: Productivity expert. Give me a 3-step "Start Blueprint" and 1 "Pro Tip". Format as: {"steps":["step1","step2","step3"],"tip":"text"}. Keep it very short.`;
+      const res = await callGemini(prompt, "You are a master productivity strategist. Return only JSON.");
+      const jsonStr = res.substring(res.indexOf('{'), res.lastIndexOf('}') + 1);
+      g.aiDraft = JSON.parse(jsonStr);
+      save(); renderGoals();
+      toast('Draft generated! ✨', 'success');
+    } catch (e) {
+      console.error(e);
+      toast('AI Drafting failed. Try again?', 'error');
     }
   }
 
@@ -1993,8 +2046,9 @@ const app = (() => {
   ];
   function getLevel(xp) { let lv=0; for(let i=XP_LEVELS.length-1;i>=0;i--){if(xp>=XP_LEVELS[i].min){lv=i;break;}} return lv; }
   function awardXP(amount, reason) {
-    const multiplier = S.activeBuffs.xpMultiplier || 1;
-    const finalAmount = Math.round(amount * multiplier);
+    const buffMult = S.activeBuffs.xpMultiplier || 1;
+    const gearMult = Object.values(S.equippedGear || {}).reduce((acc, g) => acc * (g?.effect?.xpMultiplier || 1), 1);
+    const finalAmount = Math.round(amount * buffMult * gearMult);
     const oldLv=getLevel(S.xp); S.xp+=finalAmount; S.level=getLevel(S.xp); save();
     showXPFloat(finalAmount);
     if(S.level>oldLv){const lv=XP_LEVELS[S.level];toast(`\ud83c\udf89 Level Up! ${lv.icon} ${lv.name}!`,'success');setTimeout(launchConfetti,200);}
@@ -2516,6 +2570,27 @@ Use Emojis. Be encouraging but honest like a high-end silicon valley coach.`;
     document.getElementById('zenTimer').textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   }
 
+  function renderHeroStats() {
+    const powerLevelEl = document.getElementById('heroPowerLevel');
+    const bonusesEl = document.getElementById('heroStatBonuses');
+    const iconEl = document.getElementById('heroLevelIcon');
+    if (!powerLevelEl || !bonusesEl) return;
+
+    const lv = XP_LEVELS[S.level] || XP_LEVELS[0];
+    powerLevelEl.textContent = `Lv. ${S.level} ${lv.name}`;
+    if (iconEl) iconEl.textContent = lv.icon;
+
+    const bonuses = [];
+    const xpBonus = Math.round((Object.values(S.equippedGear || {}).reduce((acc, g) => acc * (g?.effect?.xpMultiplier || 1), 1) - 1) * 100);
+    const goldBonus = Math.round((Object.values(S.equippedGear || {}).reduce((acc, g) => acc * (g?.effect?.goldMultiplier || 1), 1) - 1) * 100);
+
+    if (xpBonus > 0) bonuses.push(`<span class="gear-stat-badge">✨ +${xpBonus}% XP</span>`);
+    if (goldBonus > 0) bonuses.push(`<span class="gear-stat-badge">🪙 +${goldBonus}% Gold</span>`);
+    
+    if (bonuses.length === 0) bonusesEl.innerHTML = '<span style="font-size:10px; opacity:0.5;">No gear equipped</span>';
+    else bonusesEl.innerHTML = bonuses.join('');
+  }
+
   return {
     init, switchView,
     addGoal, deleteGoal, toggleGoalComplete, toggleGoalForm, toggleGoalExpand, cycleGoalView, toggleMatrixView,
@@ -2534,7 +2609,7 @@ Use Emojis. Be encouraging but honest like a high-end silicon valley coach.`;
     sendCoachMessage, toggleCoachBox, openMobileMenu, closeMobileMenu,
     openZenMode, closeZenMode, toggleZenActive,
     generateWeeklyReview, generateDailyReflection, closeReflection, requestNotifications,
-    resolveOrchestration, testGitHubSync
+    resolveOrchestration, testGitHubSync, generateAIDraft
   };
 })();
 
