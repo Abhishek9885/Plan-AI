@@ -522,9 +522,12 @@
       <button class="modal-close" onclick="app.closeSettings()">✕</button>
       <h3>⚙️ General Settings</h3>
       <div class="form-group" style="margin-top:15px;">
-        <label>Google Gemini API Key (For AI Features)</label>
+        <label>Google Gemini API Key (Optional)</label>
         <input type="password" id="geminiApiKeyInput" placeholder="AIzaSy... (Stored locally only)" style="width:100%;">
-        <p style="font-size:11px; color:var(--text-tertiary); margin-top:5px;">Required for Daily Reflections. Get yours free from Google AI Studio.</p>
+        <p style="font-size:11px; color:var(--text-tertiary); margin-top:5px;">
+          Enables Advanced Gemini AI feature. 
+          <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--primary); text-decoration:underline;">Get a free key here</a>.
+        </p>
       </div>
       <div class="form-actions" style="margin-top:20px;">
         <button class="btn btn-outline" onclick="app.closeSettings()">Cancel</button>

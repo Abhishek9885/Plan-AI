@@ -273,11 +273,9 @@ const app = (() => {
   }
 
   async function callGemini(prompt, systemInstruction = "") {
-
     if (!S.geminiApiKey) {
-      toast('Please set Gemini API key in Settings!', 'error');
-      showSettings();
-      return null;
+      // No automatic popup here anymore, handle it in the caller
+      return { error: 'NO_API_KEY' };
     }
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${S.geminiApiKey}`;
     try {
@@ -293,8 +291,7 @@ const app = (() => {
       return data.candidates[0].content.parts[0].text;
     } catch (e) {
       console.error('Gemini error:', e);
-      toast('AI Error: ' + e.message, 'error');
-      return null;
+      return { error: e.message };
     }
   }
 
@@ -578,46 +575,96 @@ const app = (() => {
   }
 
   // =================== AI COACH ===================
-  const coachHistory = [];
+  const COACH_TIPS = [
+    "Focus on your most difficult task during your 'Peak Hours' for maximum efficiency. 🚀",
+    "The 5-minute rule: If you're procrastinating, tell yourself you'll only work for 5 minutes. You'll likely keep going! ⏱️",
+    "Deep work requires zero distractions. Try turning on Focus Mode! 🎧",
+    "Small wins build momentum. Check off a quick habit to get started. ✨",
+    "Your brain is for having ideas, not holding them. Get everything into your Goal list! 🧠",
+    "Remember to take short breaks every 90 minutes to prevent burnout. 🧘",
+    "Consistency is more important than intensity. Keep that streak alive! 🔥",
+    "Eat the frog! Do your most dreaded task first thing in the morning. 🐸",
+    "A clean workspace leads to a clear mind. Spend 2 minutes decluttering. 🧹",
+    "Reflection is the key to growth. Try running a Daily Reflection at the end of your day. 📊"
+  ];
+
   async function processCoachMessage(input) {
-    const msg = input.trim().toLowerCase();
+    const text = input.trim();
+    const msg = text.toLowerCase();
     if (!msg) return;
-    coachHistory.push({ role: 'user', text: input.trim() });
+
+    coachHistory.push({ role: 'user', text: text });
     renderCoachMessages();
 
-    // Check for local triggers first
+    // 1. GREETINGS
+    if (msg === 'hi' || msg === 'hello' || msg === 'hey' || msg === 'yo') {
+      coachHistory.push({ role: 'coach', text: "👋 Hello! I'm your PlanAI Coach. I'm here to help you stay productive. Try asking me for 'tips', to 'plan my day', or to 'show my goals'!" });
+      renderCoachMessages();
+      return;
+    }
+
+    // 2. NAVIGATION COMMANDS
+    if (msg.includes('show') || msg.includes('open') || msg.includes('go to')) {
+      if (msg.includes('goal')) { switchView('goals'); coachHistory.push({ role: 'coach', text: "🎯 Opening your Goals view. Ready to crush some tasks?" }); }
+      else if (msg.includes('schedule') || msg.includes('plan')) { switchView('schedule'); coachHistory.push({ role: 'coach', text: "🤖 Switching to AI Schedule. Let's see what's next!" }); }
+      else if (msg.includes('habit')) { switchView('habits'); coachHistory.push({ role: 'coach', text: "✨ Opening Habit Tracker. Consistency is key!" }); }
+      else if (msg.includes('calendar')) { switchView('calendar'); coachHistory.push({ role: 'coach', text: "📅 Switching to Calendar view." }); }
+      else if (msg.includes('analytic') || msg.includes('stat')) { switchView('analytics'); coachHistory.push({ role: 'coach', text: "📈 Here's your productivity breakdown." }); }
+      else if (msg.includes('pomo')) { switchView('pomodoro'); coachHistory.push({ role: 'coach', text: "🍅 Launching Pomodoro Timer. Let's get focused!" }); }
+      else if (msg.includes('dashboard')) { switchView('dashboard'); coachHistory.push({ role: 'coach', text: "📊 Back to the Dashboard." }); }
+      
+      if (coachHistory[coachHistory.length-1].role === 'coach') {
+        renderCoachMessages();
+        return;
+      }
+    }
+
+    // 3. ACTION TRIGGERS
     if (msg.includes('plan my day') || msg.includes('generate schedule')) {
       generateSchedule();
-      const reply = '📅 I\'ve generated a smart schedule based on your goals. Check the AI Schedule tab!';
-      coachHistory.push({ role: 'coach', text: reply });
+      coachHistory.push({ role: 'coach', text: '📅 I\'ve generated a smart schedule based on your current goals. You can see it in the AI Schedule tab!' });
       renderCoachMessages();
       return;
     }
     
     if (msg.includes('reschedule') || msg.includes('missed task')) {
       rescheduleMissed();
-      const reply = '🔄 I\'ve rescheduled your missed tasks. Your timeline is updated!';
-      coachHistory.push({ role: 'coach', text: reply });
+      coachHistory.push({ role: 'coach', text: '🔄 I\'ve adjusted your timeline to accommodate missed tasks. No stress!' });
       renderCoachMessages();
       return;
     }
 
-    // Fallback to Gemini
-    const system = `You are "PlanAI Coach", a world-class productivity expert. 
-    Current State:
-    - Goals: ${S.goals.length} (${S.goals.filter(g=>g.completed).length} done)
-    - Focus Time: ${S.pomo.totalMin}m
-    - Streak: ${S.streak} days
-    Rules:
-    1. Be concise (max 3 sentences).
-    2. Use emojis.
-    3. If asked to "plan", "reschedule", or "recover", mention those specific commands work best.`;
-
-    const reply = await callGemini(input, system);
-    if (reply) {
-      coachHistory.push({ role: 'coach', text: reply });
+    if (msg.includes('motivate') || msg.includes('quote')) {
+      const q = QUOTES[Math.floor(Math.random() * QUOTES.length)];
+      coachHistory.push({ role: 'coach', text: `🌟 "${q.t}" — ${q.a}` });
       renderCoachMessages();
+      return;
     }
+
+    if (msg.includes('tip') || msg.includes('advice') || msg.includes('help')) {
+      const tip = COACH_TIPS[Math.floor(Math.random() * COACH_TIPS.length)];
+      coachHistory.push({ role: 'coach', text: `💡 Here's a productivity tip: ${tip}` });
+      renderCoachMessages();
+      return;
+    }
+
+    // 4. FALLBACK TO GEMINI (OR SMART BASIC RESPONSE)
+    const system = `You are "PlanAI Coach", a world-class productivity expert. 
+    Current State: Goals: ${S.goals.length}, Streak: ${S.streak} days.
+    Be concise (max 3 sentences). Use emojis. If you can't help, suggest using 'plan my day' or 'give me a tip'.`;
+
+    const response = await callGemini(text, system);
+    
+    if (response && response.error === 'NO_API_KEY') {
+      coachHistory.push({ role: 'coach', text: "🤖 I'm currently in **Basic Mode**. I can help with planning, motivation, and tips! \n\nTo enable my **Advanced AI Brain** (Gemini) for deep strategy and analysis, please add an API key in **Settings** (⚙️)." });
+    } else if (response && response.error) {
+      coachHistory.push({ role: 'coach', text: "😅 I'm having a little trouble connecting to my AI brain right now. Can I help you with a 'tip' or 'plan' instead?" });
+    } else if (response) {
+      coachHistory.push({ role: 'coach', text: response });
+    } else {
+      coachHistory.push({ role: 'coach', text: "🤔 I didn't quite catch that. Try asking for 'tips', to 'motivate me', or 'show my habits'!" });
+    }
+    renderCoachMessages();
   }
 
   function renderCoachMessages() {
@@ -646,7 +693,7 @@ const app = (() => {
     if (!box) return;
     box.classList.toggle('coach-open');
     if (box.classList.contains('coach-open') && coachHistory.length === 0) {
-      coachHistory.push({ role: 'coach', text: '👋 Hi! I\'m your Gemini-powered AI Coach. How can I help you stay productive today?' });
+      coachHistory.push({ role: 'coach', text: "👋 Hi! I'm your Personal Planner Coach. I can help you **plan your day**, give **focus tips**, or **motivate** you. What can I do for you today?" });
       renderCoachMessages();
     }
   }
