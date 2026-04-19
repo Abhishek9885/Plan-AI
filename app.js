@@ -2162,7 +2162,7 @@ const app = (() => {
     startTaskFocus, closeTaskFocus, toggleTaskFocusPause,
     sendCoachMessage, toggleCoachBox, openMobileMenu, closeMobileMenu,
     openZenMode, closeZenMode, toggleZenActive,
-    generateWeeklyReview, generateDailyReflection, requestNotifications
+    generateWeeklyReview, generateDailyReflection, closeReflection, requestNotifications
   };
 })();
 
