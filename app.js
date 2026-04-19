@@ -2263,9 +2263,6 @@ Use Emojis. Be encouraging but honest like a high-end silicon valley coach.`;
     ].join('');
   }
 
-    save();
-  }
-
   function showQuestLog() {
     renderQuestLog();
     const modal = document.getElementById('historyModal');
