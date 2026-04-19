@@ -282,39 +282,11 @@ const app = (() => {
     if (input) {
       S.geminiApiKey = input.value.trim();
       save();
-      toast('Settings saved successfully!', 'success');
+      toast('Configuration saved!', 'success');
       closeSettings();
     }
   }
 
-  async function generateDailyReflection() {
-    const modal = document.getElementById('reflectionModal');
-    const content = document.getElementById('reflectionContent');
-    if (modal) modal.classList.add('show');
-    if (content) content.innerHTML = '<div style="text-align:center;padding:20px;">✨ Analyzing your day with AI...</div>';
-
-    const stats = calculateProductivityScore();
-    const prompt = `Analyze my productivity for today.
-    Stats:
-    - Total Score: ${stats.total}/100
-    - Goals: ${stats.goalScore}/40
-    - Focus: ${stats.focusScore}/20
-    - Habits: ${stats.habitScore}/20
-    - Streak: ${stats.streakScore}/10
-    
-    Current Goals: ${S.goals.map(g => g.title).join(', ')}
-
-    Provide a reflective summary:
-    1. Acknowledge specific wins.
-    2. Identify one area for improvement.
-    3. Give 3 actionable tips for tomorrow.
-    Format with structured headings and emojis.`;
-
-    const reflection = await callGemini(prompt, "You are a world-class productivity auditor.");
-    if (reflection && content) {
-      content.innerHTML = reflection.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
-    }
-  }
 
   function closeReflection() {
     const modal = document.getElementById('reflectionModal');
@@ -754,9 +726,9 @@ const app = (() => {
     const response = await callGemini(text, system);
     
     if (response && response.error === 'NO_API_KEY') {
-      coachHistory.push({ role: 'coach', text: "🤖 I'm currently in **Basic Mode**. I can help with planning, motivation, and tips! \n\nTo enable my **Advanced AI Brain** (Gemini) for deep strategy and analysis, please add an API key in **Settings** (⚙️)." });
+      coachHistory.push({ role: 'coach', text: "I'm currently using my built-in logic to help you. I can assist with planning, navigation, and focus tips! 🚀\n\n*(Advanced LLM strategy can be unlocked in Settings)*" });
     } else if (response && response.error) {
-      coachHistory.push({ role: 'coach', text: "😅 I'm having a little trouble connecting to my AI brain right now. Can I help you with a 'tip' or 'plan' instead?" });
+      coachHistory.push({ role: 'coach', text: "😅 I'm having a little trouble connecting to my brain right now. Can I help you with a 'tip' or 'plan' instead?" });
     } else if (response) {
       coachHistory.push({ role: 'coach', text: response });
     } else {
@@ -1759,26 +1731,72 @@ const app = (() => {
 - Tasks Completed: ${stats.totalCompleted}
 - Total Deep Focus Time: ${Math.round(stats.totalFocus)} minutes
 - Current Level: ${S.level}
-- Current Streak: ${S.streak}
-
-Please provide:
-1. A Letter Grade (A to F).
-2. A summarizing motivational paragraph.
-3. 3 specific, actionable pieces of advice for next week.
-Format as Markdown with bold headings.`;
+- Current Streak: ${S.streak}`;
 
     try {
-      const res = await callGemini(prompt);
-      if (res.error === 'NO_API_KEY') {
-        content.innerHTML = '<div class="error-msg">⚠️ Missing API Key. Please add your Gemini API key in Settings to generate AI reports.</div>';
-        return;
+      let reportText = "";
+      if (S.geminiApiKey) {
+        const geminiRes = await callGemini(prompt + "\n\nPlease provide: 1. A Letter Grade (A to F). 2. A summarizing motivational paragraph. 3. 3 specific pieces of advice. Markdown format.");
+        if (geminiRes && !geminiRes.error) {
+          reportText = geminiRes;
+        } else {
+          reportText = generateLocalWeeklyReview(stats);
+        }
+      } else {
+        reportText = generateLocalWeeklyReview(stats);
       }
-      content.innerHTML = `<div class="report-text">${res.text}</div>`;
-      S.weeklyReports.push({ date: today(), text: res.text, stats });
+      
+      content.innerHTML = `<div class="report-text">${reportText}</div>`;
+      S.weeklyReports.push({ date: today(), text: reportText, stats });
       save();
     } catch (e) {
       content.innerHTML = `<div class="error-msg">Failed to generate report. Please try again later.</div>`;
     }
+  }
+
+  function generateLocalWeeklyReview(stats) {
+    const grade = stats.totalCompleted >= 15 ? 'A+' : stats.totalCompleted >= 10 ? 'A' : stats.totalCompleted >= 7 ? 'B' : stats.totalCompleted >= 4 ? 'C' : 'D';
+    const focusHrs = Math.round(stats.totalFocus / 60);
+    
+    let summary = "";
+    if (grade.startsWith('A')) summary = "Fantastic work this week! Your consistency is impressive and you're building a powerful habit of execution.";
+    else if (grade === 'B') summary = "A solid week of progress. You're staying active, though there's still room to push your focus even deeper.";
+    else summary = "A steady start. Consistency is the foundation of growth—try to set smaller, more achievable targets for next week.";
+
+    const tips = [
+      focusHrs < 5 ? "📈 Boost your Focus: Try using 'Rain' or 'Space' ambient scenes to stay in the zone longer." : "⚖️ Maintain Balance: You have great focus hours; ensure you're taking 'Long Breaks' to avoid burnout.",
+      stats.totalCompleted < 5 ? "🎯 Goal Setting: Start your day with 1 High Priority 'Anchor' goal." : "👑 Efficiency: You're completing tasks well; try batching similar categories together.",
+      "🧠 AI Coach: Use the built-in coach to help break down complex tasks into smaller subtasks."
+    ];
+
+    return `### **Weekly Grade: ${grade}**\n\n${summary}\n\n### **Next Week's Strategy**\n\n- ${tips[0]}\n- ${tips[1]}\n- ${tips[2]}`;
+  }
+
+  async function generateDailyReflection() {
+    const modal = document.getElementById('reflectionModal');
+    const content = document.getElementById('reflectionContent');
+    if (modal) modal.classList.add('show');
+    if (content) content.innerHTML = '<div style="text-align:center;padding:20px;">✨ Analyzing your day...</div>';
+
+    const stats = calculateProductivityScore();
+    const prompt = `Analyze today's stats: Score ${stats.total}/100, Goals ${stats.goalScore}/40, Focus ${stats.focusScore}/20.`;
+
+    let reflection = "";
+    if (S.geminiApiKey) {
+      const res = await callGemini(prompt + " Write a short 2-sentence motivational reflection.");
+      if (res && !res.error) reflection = res;
+      else reflection = generateLocalDailyReflection(stats);
+    } else {
+      reflection = generateLocalDailyReflection(stats);
+    }
+    
+    content.innerHTML = `<div class="reflection-box">${reflection}</div>`;
+  }
+
+  function generateLocalDailyReflection(stats) {
+    if (stats.total >= 80) return "Outstanding day! You've mastered your schedule and shown elite-level focus. Rest well, you've earned it.";
+    if (stats.total >= 50) return "Progress is progress! You made meaningful steps today. Keep this momentum going into tomorrow.";
+    return "Every day is a fresh start. Don't worry about the numbers—just focus on showing up again tomorrow.";
   }
 
   function renderXPBar() {

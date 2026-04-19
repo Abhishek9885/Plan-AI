@@ -548,17 +548,18 @@
     <div class="modal" style="position:relative; width:400px; max-width:90%;">
       <button class="modal-close" onclick="app.closeSettings()">✕</button>
       <h3>⚙️ General Settings</h3>
-      <div class="form-group" style="margin-top:15px;">
-        <label>Google Gemini API Key (Optional)</label>
-        <input type="password" id="geminiApiKeyInput" placeholder="AIzaSy... (Stored locally only)" style="width:100%;">
-        <p style="font-size:11px; color:var(--text-tertiary); margin-top:5px;">
-          Enables Advanced Gemini AI feature. 
-          <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--primary); text-decoration:underline;">Get a free key here</a>.
+      <div class="form-group" style="margin-top:15px; border-top: 1px solid var(--border); padding-top: 15px;">
+        <label style="font-size: 11px; opacity: 0.6;">Advanced: Gemini AI Support</label>
+        <div style="display:flex; gap:10px; margin-top:5px;">
+          <input type="password" id="geminiApiKeyInput" placeholder="Optional API Key" style="flex:1; font-size:12px;">
+          <button class="btn btn-sm btn-primary" onclick="app.saveSettings()">Connect</button>
+        </div>
+        <p style="font-size:10px; color:var(--text-tertiary); margin-top:5px;">
+          Only needed if you want to use external LLM reasoning. Local Smart Engine is already active.
         </p>
       </div>
       <div class="form-actions" style="margin-top:20px;">
-        <button class="btn btn-outline" onclick="app.closeSettings()">Cancel</button>
-        <button class="btn btn-primary" onclick="app.saveSettings()">Save Configuration</button>
+        <button class="btn btn-outline" style="width:100%" onclick="app.closeSettings()">Close Settings</button>
       </div>
     </div>
   </div>
