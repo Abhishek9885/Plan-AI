@@ -2119,6 +2119,69 @@ textarea {
   display: none
 }
 
+.report-modal {
+  max-width: 500px;
+}
+
+.ai-loading {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.ai-sparkle {
+  font-size: 40px;
+  margin-bottom: 15px;
+  animation: pulse-glow 2s infinite ease-in-out;
+}
+
+@keyframes pulse-glow {
+  0%, 100% { transform: scale(1); opacity: 0.8; text-shadow: 0 0 10px var(--primary); }
+  50% { transform: scale(1.2); opacity: 1; text-shadow: 0 0 20px var(--primary); }
+}
+
+.ai-data-points {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 20px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.report-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  font-size: 10px;
+  font-weight: 700;
+  margin-bottom: 20px;
+  letter-spacing: 0.05em;
+}
+
+.master-ai-badge {
+  background: linear-gradient(135deg, var(--primary), #a855f7);
+  color: white;
+  box-shadow: 0 4px 15px rgba(124, 58, 237, 0.3);
+}
+
+.report-text {
+  line-height: 1.6;
+  font-size: 14px;
+}
+
+.report-text strong {
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.report-text h3 {
+  margin-top: 25px;
+  font-size: 16px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--glass-border);
+  padding-bottom: 5px;
+}
+
 .modal-overlay {
   position: fixed;
   inset: 0;

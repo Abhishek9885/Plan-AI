@@ -792,6 +792,7 @@ const app = (() => {
     if (g) {
       g.completed = !g.completed;
       if (g.completed) {
+        g.completedAt = new Date().toISOString();
         playSound('check');
         S.analytics.totalCompleted++;
         const td = today();
@@ -1702,43 +1703,93 @@ const app = (() => {
     document.body.appendChild(el);setTimeout(()=>el.remove(),1500);
   }
   function getWeeklyStats() {
-    const dates = [];
+    const detail = getDetailedWeeklyStats();
+    return { 
+      totalCompleted: detail.count, 
+      totalFocus: detail.focus, 
+      days: 7, 
+      taskTitles: detail.titles,
+      categories: detail.categories
+    };
+  }
+
+  function getDetailedWeeklyStats() {
+    const now = new Date();
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    
+    // Filter tasks completed in last 7 days
+    const recentTasks = S.goals.filter(g => {
+      if (!g.completed || !g.completedAt) return false;
+      const cDate = new Date(g.completedAt);
+      return cDate >= sevenDaysAgo;
+    });
+
+    const categories = {};
+    recentTasks.forEach(t => {
+      const cat = t.category || 'work';
+      categories[cat] = (categories[cat] || 0) + 1;
+    });
+
+    // Sum focus time from analytics (more reliable as it includes pomo/zen)
+    let totalFocus = 0;
     for (let i = 0; i < 7; i++) {
       const d = new Date();
       d.setDate(d.getDate() - i);
-      dates.push(d.toISOString().split('T')[0]);
+      const ds = d.toISOString().split('T')[0];
+      totalFocus += S.analytics.dailyFocus[ds] || 0;
     }
-    
-    let totalCompleted = 0, totalFocus = 0;
-    dates.forEach(d => {
-      totalCompleted += S.analytics.dailyCompleted[d] || 0;
-      totalFocus += S.analytics.dailyFocus[d] || 0;
-    });
 
-    return { totalCompleted, totalFocus, days: 7 };
+    return {
+      count: recentTasks.length,
+      focus: totalFocus,
+      titles: recentTasks.map(t => t.title),
+      categories: categories,
+      summarized: recentTasks.map(t => `[${t.category.toUpperCase()}] ${t.title} (${t.priority})`).join(', ')
+    };
   }
 
   async function generateWeeklyReview() {
-    const stats = getWeeklyStats();
+    const stats = getDetailedWeeklyStats();
     const overlay = document.getElementById('weeklyReportOverlay');
     const content = document.getElementById('weeklyReportContent');
     if (!overlay || !content) return;
 
     overlay.classList.add('show');
-    content.innerHTML = '<div class="loading-spinner"></div><p style="text-align:center;color:var(--text-secondary);">Analyzing your performance data...</p>';
+    content.innerHTML = `
+      <div class="ai-loading">
+        <div class="ai-sparkle">✨</div>
+        <p>Gemini AI is auditing your performance...</p>
+        <div class="ai-data-points">
+          <span>Analyzing ${stats.count} completed tasks...</span>
+          <span>Calculating ${Math.round(stats.focus)} focus minutes...</span>
+        </div>
+      </div>
+    `;
 
-    const prompt = `Analyze my productivity for the last 7 days:
-- Tasks Completed: ${stats.totalCompleted}
-- Total Deep Focus Time: ${Math.round(stats.totalFocus)} minutes
-- Current Level: ${S.level}
-- Current Streak: ${S.streak}`;
+    const prompt = `Perform a GENUINE productivity audit for my last 7 days.
+Context:
+- Completed Tasks (${stats.count}): ${stats.summarized}
+- Detailed Category Split: ${JSON.stringify(stats.categories)}
+- Total Focus Time: ${Math.round(stats.focus)} mins
+- User Level: ${S.level}, Streak: ${S.streak} days
+
+Please provide a highly personalized report in Markdown:
+1. **The Executive Grade**: One Letter Grade (S, A+, A, B, C, F) with a cheeky one-liner.
+2. **Winning Patterns**: What specific things did I do well based on my task list?
+3. **The 'Focus Balance' Audit**: Analyze if my category split is healthy (Wellness vs Work).
+4. **Strategic Kill-List**: 3 hyper-specific things I should do next week to level up.
+
+Use Emojis. Be encouraging but honest like a high-end silicon valley coach.`;
 
     try {
       let reportText = "";
+      let isGenuine = false;
+
       if (S.geminiApiKey) {
-        const geminiRes = await callGemini(prompt + "\n\nPlease provide: 1. A Letter Grade (A to F). 2. A summarizing motivational paragraph. 3. 3 specific pieces of advice. Markdown format.");
+        const geminiRes = await callGemini(prompt, "You are a world-class Productivity Auditor & Performance Coach.");
         if (geminiRes && !geminiRes.error) {
           reportText = geminiRes;
+          isGenuine = true;
         } else {
           reportText = generateLocalWeeklyReview(stats);
         }
@@ -1746,11 +1797,23 @@ const app = (() => {
         reportText = generateLocalWeeklyReview(stats);
       }
       
-      content.innerHTML = `<div class="report-text">${reportText}</div>`;
-      S.weeklyReports.push({ date: today(), text: reportText, stats });
+      content.innerHTML = `
+        <div class="report-badge master-ai-badge">${isGenuine ? '⚡ GENUINE AI AUDIT' : '🔮 LOCAL SMART ENGINE'}</div>
+        <div class="report-text">
+          ${reportText
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/^### (.*$)/gm, '<h3>$1</h3>')
+            .replace(/^[\*\-] (.*$)/gm, '• $1<br>')
+            .replace(/\n/g, '<br>')}
+        </div>
+        <div style="margin-top:20px; text-align:center;">
+          <button class="btn btn-primary" onclick="document.getElementById('weeklyReportOverlay').classList.remove('show')">Got it, Coach!</button>
+        </div>
+      `;
+      S.weeklyReports.push({ date: today(), text: reportText, stats, isGenuine });
       save();
     } catch (e) {
-      content.innerHTML = `<div class="error-msg">Failed to generate report. Please try again later.</div>`;
+      content.innerHTML = `<div class="error-msg">Failed to generate report. ${e.message}</div>`;
     }
   }
 
