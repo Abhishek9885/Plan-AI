@@ -3944,7 +3944,36 @@ input[type="text"]:focus, input[type="number"]:focus, select:focus, textarea:foc
   }
 
   .main-header {
-    padding: 0 16px;
+    padding: 0 12px;
+  }
+
+  .menu-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 8px;
+  }
+
+  .header-left {
+    max-width: 30%;
+    overflow: hidden;
+  }
+
+  .header-left h1 {
+    font-size: 14px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .header-left p {
+    display: none;
+  }
+
+  .header-right {
+    gap: 3px;
+    flex: 1;
+    justify-content: flex-end;
   }
 
   .sidebar-overlay.show {
@@ -3982,8 +4011,9 @@ input[type="text"]:focus, input[type="number"]:focus, select:focus, textarea:foc
 
   .header-btn {
     padding: 8px;
-    min-width: 40px;
+    min-width: 38px;
     justify-content: center;
+    flex-shrink: 0;
   }
 
   /* Form Scaling */
