@@ -25,7 +25,6 @@ const app = (() => {
     focusTimer: { taskId: null, taskTitle: '', running: false, timeLeft: 25 * 60, interval: null },
     orchestration: { lastCheck: null, modalOpen: false, ignoreToday: false },
     raid: { active: false, boss: null, personalDamage: 0, leaderboard: [], activity: [] },
-    github: { token: '', repo: '', lastSync: null },
     equippedGear: { head: null, weapon: null, chest: null }
   };
   let pomoInterval = null;
@@ -463,15 +462,11 @@ const app = (() => {
       productivityScores: S.productivityScores
     }));
     if (S.geminiApiKey) localStorage.setItem('planai_gemini_key', S.geminiApiKey);
-    if (S.github.token) localStorage.setItem('planai_github_token', S.github.token);
-    if (S.github.repo) localStorage.setItem('planai_github_repo', S.github.repo);
   }
   function load() {
     try {
       const d = JSON.parse(localStorage.getItem('planai_data'));
       S.geminiApiKey = localStorage.getItem('planai_gemini_key') || '';
-      S.github.token = localStorage.getItem('planai_github_token') || '';
-      S.github.repo = localStorage.getItem('planai_github_repo') || '';
       if (!d) return;
       if (d.goals) S.goals = d.goals;
       if (d.habits) S.habits = d.habits;
@@ -498,17 +493,11 @@ const app = (() => {
     const modal = document.getElementById('settingsModal');
     const input = document.getElementById('geminiApiKeyInput');
     if (input) input.value = S.geminiApiKey || '';
-    const ghRepo = document.getElementById('githubRepoInput');
-    const ghToken = document.getElementById('githubTokenInput');
-    if (ghRepo) ghRepo.value = S.github.repo || '';
-    if (ghToken) ghToken.value = S.github.token || '';
     if (modal) modal.classList.add('show');
   }
 
   function saveSettings() {
     S.geminiApiKey = document.getElementById('geminiApiKeyInput').value;
-    S.github.repo = document.getElementById('githubRepoInput').value;
-    S.github.token = document.getElementById('githubTokenInput').value;
     save();
     toast('Settings saved and encrypted locally.', 'success');
   }
@@ -1065,9 +1054,6 @@ const app = (() => {
         
         // WORLD RAID STRIKE
         dealRaidDamage(g.priority, g.difficulty || 'medium');
-
-        // GITHUB SYNC BACK
-        if (g.githubIssueId) updateGitHubIssue(g);
       }
       save(); renderGoals(); renderDashboard();
       if (S.goals.length > 0 && S.goals.every(x => x.completed)) setTimeout(launchConfetti, 300);
@@ -1707,78 +1693,6 @@ const app = (() => {
     } catch (e) { toast('Export failed: ' + e.message, 'error') }
   }
 
-  // =================== GITHUB SYNC ENGINE ===================
-  async function testGitHubSync() {
-    if (!S.github.token || !S.github.repo) {
-      toast('Please provide both GitHub Repo (user/repo) and PAT in settings.', 'error');
-      showSettings();
-      return;
-    }
-    await syncGitHubIssues();
-  }
-
-  async function syncGitHubIssues() {
-    toast('Syncing with GitHub...', 'info');
-    try {
-      const res = await fetch(`https://api.github.com/repos/${S.github.repo}/issues?state=open`, {
-        headers: { 'Authorization': `token ${S.github.token}`, 'Accept': 'application/vnd.github.v3+json' }
-      });
-      if (!res.ok) throw new Error(res.statusText);
-      const issues = await res.json();
-      
-      let newCount = 0;
-      issues.forEach(issue => {
-        // Skip pull requests
-        if (issue.pull_request) return;
-        
-        // Check if already synced
-        const exists = S.goals.find(g => g.githubIssueId === issue.id);
-        if (exists) return;
-
-        const newGoal = {
-          id: genId(),
-          title: `[GH] ${issue.title}`,
-          notes: issue.html_url,
-          category: 'work',
-          priority: issue.labels.some(l => l.name.toLowerCase().includes('high') || l.name.toLowerCase().includes('urgent')) ? 'high' : 'medium',
-          difficulty: 'medium',
-          duration: 45,
-          subtasks: [],
-          completed: false,
-          createdAt: new Date().toISOString(),
-          githubIssueId: issue.id,
-          githubIssueNumber: issue.number
-        };
-        S.goals.push(newGoal);
-        newCount++;
-      });
-
-      save(); renderGoals();
-      if (newCount > 0) toast(`Successfully imported ${newCount} new quests from GitHub! 🤝`, 'success');
-      else toast('GitHub sync complete. No new quests found.', 'info');
-    } catch (e) {
-      toast('GitHub Sync Failed: ' + e.message, 'error');
-    }
-  }
-
-  async function updateGitHubIssue(goal) {
-    if (!goal.githubIssueId || !S.github.token || !S.github.repo) return;
-    
-    try {
-      const res = await fetch(`https://api.github.com/repos/${S.github.repo}/issues/${goal.githubIssueNumber}`, {
-        method: 'PATCH',
-        headers: { 
-          'Authorization': `token ${S.github.token}`, 
-          'Accept': 'application/vnd.github.v3+json',
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ state: 'closed' })
-      });
-      if (res.ok) toast(`GitHub Issue #${goal.githubIssueNumber} closed! ✅`, 'success');
-    } catch (e) {
-      console.error('GitHub Background Sync Failed', e);
-    }
-  }
 
   function handleImport(input) {
     const file = input.files && input.files[0];
@@ -2626,7 +2540,7 @@ Use Emojis. Be encouraging but honest like a high-end silicon valley coach.`;
     sendCoachMessage, toggleCoachBox, openMobileMenu, closeMobileMenu,
     openZenMode, closeZenMode, toggleZenActive,
     generateWeeklyReview, generateDailyReflection, closeReflection, requestNotifications,
-    resolveOrchestration, testGitHubSync, generateAIDraft
+    resolveOrchestration, generateAIDraft
   };
 })();
 
