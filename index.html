@@ -246,6 +246,7 @@
       <div class="view-header">
         <h2>My Goals</h2>
         <div class="view-actions">
+          <button class="btn btn-outline" onclick="app.testGitHubSync()">🔄 Sync GitHub</button>
           <button class="btn btn-outline" id="toggleGoalViewBtn" onclick="app.cycleGoalView()">📊 Board</button>
           <button class="btn btn-outline" id="toggleMatrixBtn" onclick="app.toggleMatrixView()">🎯 Matrix</button>
           <button class="btn btn-primary" onclick="app.toggleGoalForm()">+ Add Goal</button>
@@ -565,6 +566,18 @@
           <input type="password" id="geminiApiKeyInput" placeholder="Optional API Key" style="flex:1; font-size:12px;">
           <button class="btn btn-sm btn-primary" onclick="app.saveSettings()">Connect</button>
         </div>
+      </div>
+
+      <div class="form-group" style="margin-top:10px; border-top: 1px solid var(--border); padding-top: 15px;">
+        <label style="font-size: 11px; opacity: 0.6;">🤝 Integrations: GitHub Sync</label>
+        <div style="display:flex; flex-direction:column; gap:8px; margin-top:5px;">
+          <input type="text" id="githubRepoInput" placeholder="username/repo" style="font-size:12px;">
+          <input type="password" id="githubTokenInput" placeholder="GitHub PAT (Personal Access Token)" style="font-size:12px;">
+          <button class="btn btn-sm btn-outline" onclick="app.testGitHubSync()">Sync Now 🔄</button>
+        </div>
+        <p style="font-size:10px; color:var(--text-tertiary); margin-top:5px;">
+          Sync your work issues directly as PlanAI Quests.
+        </p>
       </div>
 
       <div class="form-actions" style="margin-top:20px;">
