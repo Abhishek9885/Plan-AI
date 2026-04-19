@@ -1709,6 +1709,17 @@ const app = (() => {
       console.error('GitHub Background Sync Failed', e);
     }
   }
+
+  function handleImport(input) {
+    const file = input.files && input.files[0];
+    if (!file) { toast('No file selected', 'error'); return }
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const d = JSON.parse(e.target.result);
+        if (d.goals) S.goals = d.goals;
+        if (d.habits) S.habits = d.habits;
+        if (d.schedule) S.schedule = d.schedule;
         if (d.scheduleCompleted) S.scheduleCompleted = d.scheduleCompleted;
         if (typeof d.streak === 'number') S.streak = d.streak;
         if (typeof d.bestStreak === 'number') S.bestStreak = d.bestStreak;
