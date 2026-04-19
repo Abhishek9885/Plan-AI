@@ -38,6 +38,7 @@
       <div class="nav-divider"></div>
       <li class="nav-item" data-view="analytics"><span class="nav-icon">📈</span><span>Analytics</span></li>
       <li class="nav-item" data-view="shop"><span class="nav-icon">🛒</span><span>Gold Shop</span></li>
+      <li class="nav-item" data-view="raids"><span class="nav-icon">⚔️</span><span>World Raids</span></li>
       <li class="nav-item" data-view="pomodoro"><span class="nav-icon">🍅</span><span>Pomodoro</span></li>
     </ul>
     <div class="sidebar-footer">
@@ -235,6 +236,7 @@
       <div class="view-header">
         <h2>My Goals</h2>
         <div class="view-actions">
+          <button class="btn btn-outline" onclick="app.testGitHubSync()">🔄 Sync GitHub</button>
           <button class="btn btn-outline" id="toggleGoalViewBtn" onclick="app.cycleGoalView()">📊 Board</button>
           <button class="btn btn-outline" id="toggleMatrixBtn" onclick="app.toggleMatrixView()">🎯 Matrix</button>
           <button class="btn btn-primary" onclick="app.toggleGoalForm()">+ Add Goal</button>
@@ -554,10 +556,20 @@
           <input type="password" id="geminiApiKeyInput" placeholder="Optional API Key" style="flex:1; font-size:12px;">
           <button class="btn btn-sm btn-primary" onclick="app.saveSettings()">Connect</button>
         </div>
+      </div>
+
+      <div class="form-group" style="margin-top:10px; border-top: 1px solid var(--border); padding-top: 15px;">
+        <label style="font-size: 11px; opacity: 0.6;">🤝 Integrations: GitHub Sync</label>
+        <div style="display:flex; flex-direction:column; gap:8px; margin-top:5px;">
+          <input type="text" id="githubRepoInput" placeholder="username/repo" style="font-size:12px;">
+          <input type="password" id="githubTokenInput" placeholder="GitHub PAT (Personal Access Token)" style="font-size:12px;">
+          <button class="btn btn-sm btn-outline" onclick="app.testGitHubSync()">Sync Now 🔄</button>
+        </div>
         <p style="font-size:10px; color:var(--text-tertiary); margin-top:5px;">
-          Only needed if you want to use external LLM reasoning. Local Smart Engine is already active.
+          Sync your work issues directly as PlanAI Quests.
         </p>
       </div>
+
       <div class="form-actions" style="margin-top:20px;">
         <button class="btn btn-outline" style="width:100%" onclick="app.closeSettings()">Close Settings</button>
       </div>
@@ -570,6 +582,29 @@
       <h3>✨ AI Daily Reflection</h3>
       <div id="reflectionContent" style="margin-top:15px; line-height:1.5; font-size:14px;">
         <!-- AI content loads here -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Sentient AI Orchestration Modal -->
+  <div class="modal-overlay" id="orchestrationModal">
+    <div class="modal sentient-modal" style="position:relative; width:450px; max-width:90%; border: 1px solid var(--primary-glow);">
+      <div class="sentient-header">
+        <div class="ai-orb"></div>
+        <h3>AI Assistant Orchestration</h3>
+      </div>
+      <div style="margin-top:20px; text-align:center;">
+        <p style="font-size:16px; font-weight:600; color:var(--text-primary);">"I noticed you're falling behind on <span id="orchTaskTitle" style="color:var(--primary);">Task</span>."</p>
+        <p style="font-size:13px; color:var(--text-secondary); margin-top:10px; opacity:0.8;">The clock is ticking. Should I re-balance your day to protect your streak?</p>
+      </div>
+
+      <div class="form-actions" style="margin-top:25px; flex-direction:column; gap:10px;">
+        <button class="btn btn-primary" style="width:100%; height:45px;" onclick="app.resolveOrchestration('reschedule')">⚖️ Re-balance Current Schedule</button>
+        <button class="btn btn-outline" style="width:100%; height:45px;" onclick="app.resolveOrchestration('recover')">🚀 Activate Emergency Recovery</button>
+        <div style="display:flex; gap:10px; width:100%;">
+          <button class="btn btn-ghost" style="flex:1;" onclick="app.resolveOrchestration('ignore')">Ignored</button>
+          <button class="btn btn-ghost" style="flex:1;" onclick="app.resolveOrchestration('close')">Wait, I'm Done!</button>
+        </div>
       </div>
     </div>
   </div>
@@ -616,6 +651,55 @@
     </div>
   </div>
   
+  <!-- ============ WORLD RAIDS VIEW ============ -->
+  <section class="view" id="raids-view">
+    <div class="view-header">
+      <h2>⚔️ Multi-Player World Raid</h2>
+      <p style="font-size:12px; color:var(--text-secondary);">Join a community effort to take down the manifestations of procrastination!</p>
+    </div>
+
+    <div class="raid-boss-card card" style="text-align:center; padding:40px; border: 2px solid var(--danger-glow); max-width: 800px; margin: 20px auto;">
+      <div id="raidBossGraphic" class="raid-boss-icon" style="font-size:100px; margin-bottom: 20px; filter: drop-shadow(0 10px 20px rgba(255,0,0,0.3));">🐉</div>
+      <h3 id="raidBossName" style="font-size:24px; color:var(--danger); letter-spacing:2px; text-transform:uppercase;">The Procrastination Dragon</h3>
+      
+      <div class="hp-container" style="margin: 30px auto; width: 100%; max-width: 600px;">
+        <div style="display:flex; justify-content:space-between; font-size:14px; margin-bottom:10px; font-weight:700;">
+          <span style="color:var(--danger);">HP</span>
+          <span id="raidBossHPText">1,000,000 / 1,000,000</span>
+        </div>
+        <div class="hp-bar-track" style="height:20px; background:rgba(0,0,0,0.3); border-radius:10px; overflow:hidden; border:1px solid rgba(255,255,255,0.1);">
+          <div id="raidBossHPFill" class="hp-bar-fill" style="width:100%; height:100%; background: linear-gradient(90deg, #ef4444, #f87171); box-shadow: 0 0 20px rgba(239, 68, 68, 0.5); transition: width 0.5s cubic-bezier(0.17, 0.67, 0.83, 0.67);"></div>
+        </div>
+      </div>
+
+      <div style="background:rgba(255,255,255,0.05); padding:15px; border-radius:12px;">
+        <p style="font-size:14px; color:var(--text-primary);">Finish your **High Priority Quests** today to deal maximum damage!</p>
+        <p id="raidStatusLabel" style="font-size:12px; color:var(--text-tertiary); margin-top:5px;">Raid concludes in: <span id="raidTimeLeft">Calculating...</span></p>
+      </div>
+
+      <div id="raidActionZone" style="margin-top:30px; display:none;">
+          <button class="btn btn-primary btn-lg" onclick="app.switchView('goals')">Go to Quests</button>
+      </div>
+    </div>
+
+    <div class="raid-analytics grid-2" style="max-width:800px; margin: 40px auto; gap:20px;">
+      <div class="card">
+        <h3>🏆 Top Hero Damage</h3>
+        <div id="raidLeaderboard" class="raid-list">
+          <!-- Rendered via JS -->
+          <div style="text-align:center; opacity:0.5; padding:20px;">Retrieving hero rankings...</div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>✨ Recent Strikes</h3>
+        <div id="raidActivity" class="raid-list">
+          <!-- Rendered via JS -->
+          <div style="text-align:center; opacity:0.5; padding:20px;">Listening for strikes...</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- ============ GOLD SHOP VIEW ============ -->
   <section class="view" id="shop-view">
     <div class="view-header">

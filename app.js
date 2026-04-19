@@ -22,7 +22,10 @@ const app = (() => {
     weeklyReports: [],
     productivityScores: {},
     notificationsEnabled: false, focusMode: false,
-    focusTimer: { taskId: null, taskTitle: '', running: false, timeLeft: 25 * 60, interval: null }
+    focusTimer: { taskId: null, taskTitle: '', running: false, timeLeft: 25 * 60, interval: null },
+    orchestration: { lastCheck: null, modalOpen: false, ignoreToday: false },
+    raid: { active: false, boss: null, personalDamage: 0, leaderboard: [], activity: [] },
+    github: { token: '', repo: '', lastSync: null }
   };
   let pomoInterval = null;
   const ambientState = { ctx: null, source: null, gain: null, type: null };
@@ -149,6 +152,209 @@ const app = (() => {
     return Math.floor((now - start) / 86400000);
   }
 
+  // =================== SENTIENT ORCHESTRATION ===================
+  function startOrchestrationGuard() {
+    setInterval(() => {
+      if (S.orchestration.modalOpen || S.orchestration.ignoreToday || S.currentView === 'pomo') return;
+      
+      const now = new Date();
+      const currentMin = now.getHours() * 60 + now.getMinutes();
+      const td = today();
+      
+      // Only check if we have a schedule for today
+      const schedule = S.schedule;
+      if (!schedule || !schedule.length) return;
+
+      // Find if we are currently "late" for a task
+      // A task is "active" if currentMin is between start and end
+      // A task is "late" if currentMin > end + 15 and not completed
+      let lateTask = null;
+      for (const t of schedule) {
+        if (t.isBreak) continue;
+        const endMin = t.endHour * 60 + t.endMin;
+        const isDone = S.scheduleCompleted[t.id];
+        
+        if (!isDone && currentMin > endMin + 15) {
+          lateTask = t;
+          break; // Found the first late task
+        }
+      }
+
+      if (lateTask) {
+        showOrchestrationModal(lateTask);
+      }
+    }, 60000); // Check every minute
+  }
+
+  function showOrchestrationModal(task) {
+    S.orchestration.modalOpen = true;
+    const modal = document.getElementById('orchestrationModal');
+    if (!modal) return;
+
+    const titleEl = document.getElementById('orchTaskTitle');
+    if (titleEl) titleEl.textContent = task.title;
+
+    modal.classList.add('show');
+    playSound('bell'); // Subtle alert
+  }
+
+  function resolveOrchestration(action) {
+    const modal = document.getElementById('orchestrationModal');
+    if (modal) modal.classList.remove('show');
+    S.orchestration.modalOpen = false;
+
+    if (action === 'reschedule') {
+      rescheduleMissed();
+      toast('AI has balanced your day! ⚖️', 'success');
+    } else if (action === 'recover') {
+      recoverDayMode();
+      toast('Emergency Recovery active! 🚀', 'info');
+    } else if (action === 'ignore') {
+      S.orchestration.ignoreToday = true;
+      toast('Sentient Guard standing down for today.', 'info');
+    }
+  }
+
+  // =================== WORLD RAIDS (FIREBASE) ===================
+  function initRaidSystem() {
+    if (!db) return;
+    
+    // Listen to global boss state
+    db.collection('world_raids').doc('active_raid').onSnapshot(doc => {
+      if (doc.exists) {
+        S.raid.boss = doc.data();
+        S.raid.active = true;
+        renderRaidView();
+      } else {
+        // Initialize a default boss if none exists (for first run)
+        const initBoss = {
+          name: "The Procrastination Dragon",
+          icon: "🐉",
+          maxHP: 1000000,
+          currentHP: 1000000,
+          endTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+          rewardXP: 1000,
+          rewardGold: 500
+        };
+        db.collection('world_raids').doc('active_raid').set(initBoss);
+      }
+    });
+
+    // Listen to top contributors
+    db.collection('world_raids').doc('active_raid').collection('contributors')
+      .orderBy('damage', 'desc').limit(5).onSnapshot(snap => {
+        S.raid.leaderboard = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        renderRaidLeaderboard();
+      });
+
+    // Listen to recent activity
+    db.collection('world_raids').doc('active_raid').collection('activity')
+      .orderBy('timestamp', 'desc').limit(5).onSnapshot(snap => {
+        S.raid.activity = snap.docs.map(d => d.data());
+        renderRaidActivity();
+      });
+  }
+
+  function dealRaidDamage(priority, difficulty) {
+    if (!S.raid.active || !currentUser) return;
+
+    const baseDamage = priority === 'high' ? 500 : priority === 'medium' ? 200 : 50;
+    const multiplier = difficulty === 'hard' ? 2 : difficulty === 'medium' ? 1.5 : 1;
+    const finalDamage = Math.round(baseDamage * multiplier);
+
+    // Update global HP (Atomic decrement)
+    const bossRef = db.collection('world_raids').doc('active_raid');
+    bossRef.update({
+      currentHP: firebase.firestore.FieldValue.increment(-finalDamage)
+    });
+
+    // Update user contribution
+    const userRef = bossRef.collection('contributors').doc(currentUser.uid);
+    userRef.set({
+      name: currentUser.displayName || "Anonymous Hero",
+      damage: firebase.firestore.FieldValue.increment(finalDamage),
+      avatar: currentUser.photoURL || ""
+    }, { merge: true });
+
+    // Log activity
+    bossRef.collection('activity').add({
+      userName: currentUser.displayName || "Hero",
+      damage: finalDamage,
+      timestamp: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    toast(`⚔️ CRITICAL STRIKE! Dealt ${finalDamage} damage to the Boss!`, 'raid');
+    S.raid.personalDamage += finalDamage;
+  }
+
+  function renderRaidView() {
+    if (S.currentView !== 'raids' || !S.raid.boss) return;
+    
+    document.getElementById('raidBossIcon')?.setAttribute('textContent', S.raid.boss.icon);
+    document.getElementById('raidBossName').textContent = S.raid.boss.name;
+    
+    const hpPct = (S.raid.boss.currentHP / S.raid.boss.maxHP) * 100;
+    document.getElementById('raidBossHPFill').style.width = `${hpPct}%`;
+    document.getElementById('raidBossHPText').textContent = `${S.raid.boss.currentHP.toLocaleString()} / ${S.raid.boss.maxHP.toLocaleString()}`;
+    
+    // Time left calculation
+    const end = new Date(S.raid.boss.endTime);
+    const now = new Date();
+    const diff = end - now;
+    if (diff > 0) {
+      const days = Math.floor(diff / 86400000);
+      const hrs = Math.floor((diff % 86400000) / 3600000);
+      document.getElementById('raidTimeLeft').textContent = `${days}d ${hrs}h`;
+    } else {
+      document.getElementById('raidTimeLeft').textContent = "Concluded!";
+    }
+  }
+
+  function renderRaidLeaderboard() {
+    const list = document.getElementById('raidLeaderboard');
+    if (!list) return;
+    
+    if (S.raid.leaderboard.length === 0) {
+      list.innerHTML = '<div style="text-align:center; padding:20px; opacity:0.5;">No heroes yet... be the first!</div>';
+      return;
+    }
+
+    list.innerHTML = S.raid.leaderboard.map((hero, i) => `
+      <div class="raid-leader-item" style="display:flex; align-items:center; gap:12px; padding:12px; border-bottom: 1px solid var(--glass-border);">
+        <span style="font-weight:700; width:24px; color:var(--text-tertiary);">${i + 1}</span>
+        <div style="width:32px; height:32px; border-radius:50%; background:var(--bg-tertiary); overflow:hidden;">
+          <img src="${hero.avatar || 'https://via.placeholder.com/32'}" style="width:100%; height:100%; object-fit:cover;">
+        </div>
+        <div style="flex:1;">
+          <div style="font-weight:600; font-size:13px;">${hero.name}</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-weight:700; color:var(--danger); font-size:14px;">${hero.damage.toLocaleString()}</div>
+          <div style="font-size:10px; opacity:0.5;">DAMAGE</div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function renderRaidActivity() {
+    const list = document.getElementById('raidActivity');
+    if (!list) return;
+
+    if (S.raid.activity.length === 0) {
+      list.innerHTML = '<div style="text-align:center; padding:20px; opacity:0.5;">Silence in the arena...</div>';
+      return;
+    }
+
+    list.innerHTML = S.raid.activity.map(act => `
+      <div class="raid-activity-item" style="padding:10px; font-size:12px; border-left: 2px solid var(--danger); margin-bottom:8px; background:rgba(255,255,255,0.02);">
+        <span style="font-weight:700; color:var(--text-primary);">${act.userName}</span> 
+        <span style="opacity:0.7;">struck for</span> 
+        <span style="color:var(--danger); font-weight:700;">${act.damage}</span> 
+        <span style="opacity:0.5; font-size:10px; float:right;">Recent</span>
+      </div>
+    `).join('');
+  }
+
   // =================== SOUNDS ===================
   function playSound(type) {
     if (!S.soundEnabled) return;
@@ -240,11 +446,15 @@ const app = (() => {
       productivityScores: S.productivityScores
     }));
     if (S.geminiApiKey) localStorage.setItem('planai_gemini_key', S.geminiApiKey);
+    if (S.github.token) localStorage.setItem('planai_github_token', S.github.token);
+    if (S.github.repo) localStorage.setItem('planai_github_repo', S.github.repo);
   }
   function load() {
     try {
       const d = JSON.parse(localStorage.getItem('planai_data'));
       S.geminiApiKey = localStorage.getItem('planai_gemini_key') || '';
+      S.github.token = localStorage.getItem('planai_github_token') || '';
+      S.github.repo = localStorage.getItem('planai_github_repo') || '';
       if (!d) return;
       if (d.goals) S.goals = d.goals;
       if (d.habits) S.habits = d.habits;
@@ -271,7 +481,19 @@ const app = (() => {
     const modal = document.getElementById('settingsModal');
     const input = document.getElementById('geminiApiKeyInput');
     if (input) input.value = S.geminiApiKey || '';
+    const ghRepo = document.getElementById('githubRepoInput');
+    const ghToken = document.getElementById('githubTokenInput');
+    if (ghRepo) ghRepo.value = S.github.repo || '';
+    if (ghToken) ghToken.value = S.github.token || '';
     if (modal) modal.classList.add('show');
+  }
+
+  function saveSettings() {
+    S.geminiApiKey = document.getElementById('geminiApiKeyInput').value;
+    S.github.repo = document.getElementById('githubRepoInput').value;
+    S.github.token = document.getElementById('githubTokenInput').value;
+    save();
+    toast('Settings saved and encrypted locally.', 'success');
   }
   function closeSettings() {
     const modal = document.getElementById('settingsModal');
@@ -360,7 +582,7 @@ const app = (() => {
     document.querySelectorAll('.mobile-nav-item').forEach(i => i.classList.toggle('active', i.dataset.view === v));
     document.querySelectorAll('.view').forEach(s => s.classList.toggle('active', s.id === `${v}-view`));
     
-    const titles = { dashboard: 'Dashboard', goals: 'My Goals', schedule: 'AI Schedule', habits: 'Habit Tracker', calendar: 'Calendar', analytics: 'Analytics', pomodoro: 'Pomodoro Timer', shop: 'Gold Shop' };
+    const titles = { dashboard: 'Dashboard', goals: 'My Goals', schedule: 'AI Schedule', habits: 'Habit Tracker', calendar: 'Calendar', analytics: 'Analytics', pomodoro: 'Pomodoro Timer', shop: 'Gold Shop', raids: 'World Raids' };
     document.getElementById('viewTitle').textContent = titles[v] || v;
     S.currentView = v;
     
@@ -374,6 +596,7 @@ const app = (() => {
     if (v === 'analytics') renderAnalytics();
     if (v === 'pomodoro') renderPomoTaskSelect();
     if (v === 'shop') renderShop();
+    if (v === 'raids') { renderRaidView(); renderRaidLeaderboard(); renderRaidActivity(); }
     
     // Scroll to top on mobile
     if (window.innerWidth <= 768) window.scrollTo(0, 0);
@@ -808,6 +1031,12 @@ const app = (() => {
         awardGold(rewards.gold, g.title);
         
         checkAchievements();
+        
+        // WORLD RAID STRIKE
+        dealRaidDamage(g.priority, g.difficulty || 'medium');
+
+        // GITHUB SYNC BACK
+        if (g.githubIssueId) updateGitHubIssue(g);
       }
       save(); renderGoals(); renderDashboard();
       if (S.goals.length > 0 && S.goals.every(x => x.completed)) setTimeout(launchConfetti, 300);
@@ -1408,16 +1637,78 @@ const app = (() => {
     } catch (e) { toast('Export failed: ' + e.message, 'error') }
   }
 
-  function handleImport(input) {
-    const file = input.files && input.files[0];
-    if (!file) { toast('No file selected', 'error'); return }
-    const reader = new FileReader();
-    reader.onload = e => {
-      try {
-        const d = JSON.parse(e.target.result);
-        if (d.goals) S.goals = d.goals;
-        if (d.habits) S.habits = d.habits;
-        if (d.schedule) S.schedule = d.schedule;
+  // =================== GITHUB SYNC ENGINE ===================
+  async function testGitHubSync() {
+    if (!S.github.token || !S.github.repo) {
+      toast('Please provide both GitHub Repo (user/repo) and PAT in settings.', 'error');
+      showSettings();
+      return;
+    }
+    await syncGitHubIssues();
+  }
+
+  async function syncGitHubIssues() {
+    toast('Syncing with GitHub...', 'info');
+    try {
+      const res = await fetch(`https://api.github.com/repos/${S.github.repo}/issues?state=open`, {
+        headers: { 'Authorization': `token ${S.github.token}`, 'Accept': 'application/vnd.github.v3+json' }
+      });
+      if (!res.ok) throw new Error(res.statusText);
+      const issues = await res.json();
+      
+      let newCount = 0;
+      issues.forEach(issue => {
+        // Skip pull requests
+        if (issue.pull_request) return;
+        
+        // Check if already synced
+        const exists = S.goals.find(g => g.githubIssueId === issue.id);
+        if (exists) return;
+
+        const newGoal = {
+          id: genId(),
+          title: `[GH] ${issue.title}`,
+          notes: issue.html_url,
+          category: 'work',
+          priority: issue.labels.some(l => l.name.toLowerCase().includes('high') || l.name.toLowerCase().includes('urgent')) ? 'high' : 'medium',
+          difficulty: 'medium',
+          duration: 45,
+          subtasks: [],
+          completed: false,
+          createdAt: new Date().toISOString(),
+          githubIssueId: issue.id,
+          githubIssueNumber: issue.number
+        };
+        S.goals.push(newGoal);
+        newCount++;
+      });
+
+      save(); renderGoals();
+      if (newCount > 0) toast(`Successfully imported ${newCount} new quests from GitHub! 🤝`, 'success');
+      else toast('GitHub sync complete. No new quests found.', 'info');
+    } catch (e) {
+      toast('GitHub Sync Failed: ' + e.message, 'error');
+    }
+  }
+
+  async function updateGitHubIssue(goal) {
+    if (!goal.githubIssueId || !S.github.token || !S.github.repo) return;
+    
+    try {
+      const res = await fetch(`https://api.github.com/repos/${S.github.repo}/issues/${goal.githubIssueNumber}`, {
+        method: 'PATCH',
+        headers: { 
+          'Authorization': `token ${S.github.token}`, 
+          'Accept': 'application/vnd.github.v3+json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ state: 'closed' })
+      });
+      if (res.ok) toast(`GitHub Issue #${goal.githubIssueNumber} closed! ✅`, 'success');
+    } catch (e) {
+      console.error('GitHub Background Sync Failed', e);
+    }
+  }
         if (d.scheduleCompleted) S.scheduleCompleted = d.scheduleCompleted;
         if (typeof d.streak === 'number') S.streak = d.streak;
         if (typeof d.bestStreak === 'number') S.bestStreak = d.bestStreak;
@@ -2058,6 +2349,12 @@ Use Emojis. Be encouraging but honest like a high-end silicon valley coach.`;
     // Initial renders
     renderAchievementsWall();
     if (document.getElementById('userGold')) animateValue(document.getElementById('userGold'), S.gold);
+
+    // Sentient Orchestration
+    startOrchestrationGuard();
+
+    // World Raids
+    initRaidSystem();
   }
 
   function checkAchievements() {
@@ -2225,7 +2522,8 @@ Use Emojis. Be encouraging but honest like a high-end silicon valley coach.`;
     startTaskFocus, closeTaskFocus, toggleTaskFocusPause,
     sendCoachMessage, toggleCoachBox, openMobileMenu, closeMobileMenu,
     openZenMode, closeZenMode, toggleZenActive,
-    generateWeeklyReview, generateDailyReflection, closeReflection, requestNotifications
+    generateWeeklyReview, generateDailyReflection, closeReflection, requestNotifications,
+    resolveOrchestration, testGitHubSync
   };
 })();
 
