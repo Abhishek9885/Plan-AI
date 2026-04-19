@@ -575,6 +575,7 @@ const app = (() => {
   }
 
   // =================== AI COACH ===================
+  let coachHistory = [];
   const COACH_TIPS = [
     "Focus on your most difficult task during your 'Peak Hours' for maximum efficiency. 🚀",
     "The 5-minute rule: If you're procrastinating, tell yourself you'll only work for 5 minutes. You'll likely keep going! ⏱️",
@@ -693,7 +694,7 @@ const app = (() => {
     if (!box) return;
     box.classList.toggle('coach-open');
     if (box.classList.contains('coach-open') && coachHistory.length === 0) {
-      coachHistory.push({ role: 'coach', text: "👋 Hi! I'm your Personal Planner Coach. I can help you **plan your day**, give **focus tips**, or **motivate** you. What can I do for you today?" });
+      coachHistory.push({ role: 'coach', text: "👋 **Hi! How can I help you stay productive today?**\n\nYou can try saying things like:\n- *'Plan my day'* 📅\n- *'Give me a focus tip'* 💡\n- *'Show my habits'* ✨\n- *'Motivate me'* 🌟" });
       renderCoachMessages();
     }
   }
