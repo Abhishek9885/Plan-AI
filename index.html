@@ -108,8 +108,23 @@
         </div>
       </div>
 
+      <!-- Productivity Garden Section -->
+      <div class="card premium-card gradient-border productivity-garden-container">
+        <div class="garden-header">
+          <h3>🌱 Productivity Garden</h3>
+          <div class="garden-stats" id="gardenStats">Level 0 Oasis</div>
+        </div>
+        <div class="garden-plot" id="gardenPlot">
+          <!-- Plants rendered here dynamically -->
+        </div>
+        <div class="garden-footer">
+          <span id="gardenMotto">Keep consistency to grow your habitat</span>
+        </div>
+      </div>
+
       <!-- Compact Progress Bar -->
       <div class="progress-bar-section">
+
         <div class="progress-bar-header"><span>📊 Today's Progress</span><span class="progress-pct"
             id="progressPct">0%</span></div>
         <div class="progress-bar-track">
@@ -323,6 +338,8 @@
             Missed</button>
           <button class="btn btn-outline" id="exportIcsBtn" onclick="app.exportICS()" style="display:none">📅 Export
             .ics</button>
+
+
           <button class="btn btn-outline" id="shareScheduleBtn" onclick="app.shareSchedule()" style="display:none">📤
             Share</button>
         </div>

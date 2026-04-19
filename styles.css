@@ -4098,3 +4098,103 @@ input[type="text"]:focus, input[type="number"]:focus, select:focus, textarea:foc
     font-size: 20px;
   }
 }
+
+/* ============ PRODUCTIVITY GARDEN ============ */
+.productivity-garden-container {
+  margin-bottom: 24px;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.05), rgba(34, 211, 238, 0.03));
+}
+
+.garden-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.garden-stats {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--success);
+  padding: 4px 12px;
+  background: rgba(16, 185, 129, 0.1);
+  border-radius: var(--radius-full);
+}
+
+.garden-plot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-height: 120px;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: var(--radius-lg);
+  border: 1px dashed var(--glass-border);
+  justify-content: center;
+  align-items: flex-end;
+  position: relative;
+}
+
+[data-theme="light"] .garden-plot {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.garden-slot {
+  width: 45px;
+  height: 45px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  position: relative;
+  transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: plantSway 4s ease-in-out infinite alternate;
+}
+
+.garden-slot.new-plant {
+  animation: plantPop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes plantSway {
+  from { transform: rotate(-2deg) translateY(0); }
+  to { transform: rotate(2deg) translateY(-2px); }
+}
+
+@keyframes plantPop {
+  0% { transform: scale(0) translateY(20px); opacity: 0; }
+  70% { transform: scale(1.2) translateY(-5px); opacity: 1; }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+.garden-slot::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  width: 20px;
+  height: 4px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 50%;
+  filter: blur(2px);
+  z-index: -1;
+}
+
+.garden-footer {
+  margin-top: 15px;
+  text-align: center;
+}
+
+#gardenMotto {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
+.garden-bloom {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 5;
+}

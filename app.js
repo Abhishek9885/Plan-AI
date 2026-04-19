@@ -47,6 +47,7 @@ const app = (() => {
   });
 
   function signInWithGoogle() {
+
     const provider = new firebase.auth.GoogleAuthProvider();
     auth.signInWithPopup(provider).catch(e => {
         console.error(e);
@@ -54,6 +55,8 @@ const app = (() => {
     });
   }
   function signOut() { auth.signOut(); }
+
+
 
   // =================== QUOTES (30+ for variety) ===================
   const QUOTES = [
@@ -191,10 +194,12 @@ const app = (() => {
       analytics: S.analytics, pomo: { sessions: S.pomo.sessions, totalMin: S.pomo.totalMin },
       xp: S.xp, level: S.level, productivityScores: S.productivityScores
     }));
+    if (S.geminiApiKey) localStorage.setItem('planai_gemini_key', S.geminiApiKey);
   }
   function load() {
     try {
       const d = JSON.parse(localStorage.getItem('planai_data'));
+      S.geminiApiKey = localStorage.getItem('planai_gemini_key') || '';
       if (!d) return;
       if (d.goals) S.goals = d.goals;
       if (d.habits) S.habits = d.habits;
@@ -211,6 +216,88 @@ const app = (() => {
       if (d.productivityScores) S.productivityScores = d.productivityScores;
     } catch (e) { }
   }
+
+  // =================== SETTINGS & AI CONFIG ===================
+  function showSettings() {
+    const modal = document.getElementById('settingsModal');
+    const input = document.getElementById('geminiApiKeyInput');
+    if (input) input.value = S.geminiApiKey || '';
+    if (modal) modal.classList.add('show');
+  }
+  function closeSettings() {
+    const modal = document.getElementById('settingsModal');
+    if (modal) modal.classList.remove('show');
+  }
+  function saveSettings() {
+    const input = document.getElementById('geminiApiKeyInput');
+    if (input) {
+      S.geminiApiKey = input.value.trim();
+      save();
+      toast('Settings saved successfully!', 'success');
+      closeSettings();
+    }
+  }
+
+  async function generateDailyReflection() {
+    const modal = document.getElementById('reflectionModal');
+    const content = document.getElementById('reflectionContent');
+    if (modal) modal.classList.add('show');
+    if (content) content.innerHTML = '<div style="text-align:center;padding:20px;">✨ Analyzing your day with AI...</div>';
+
+    const stats = calculateProductivityScore();
+    const prompt = `Analyze my productivity for today.
+    Stats:
+    - Total Score: ${stats.total}/100
+    - Goals: ${stats.goalScore}/40
+    - Focus: ${stats.focusScore}/20
+    - Habits: ${stats.habitScore}/20
+    - Streak: ${stats.streakScore}/10
+    
+    Current Goals: ${S.goals.map(g => g.title).join(', ')}
+
+    Provide a reflective summary:
+    1. Acknowledge specific wins.
+    2. Identify one area for improvement.
+    3. Give 3 actionable tips for tomorrow.
+    Format with structured headings and emojis.`;
+
+    const reflection = await callGemini(prompt, "You are a world-class productivity auditor.");
+    if (reflection && content) {
+      content.innerHTML = reflection.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+    }
+  }
+
+  function closeReflection() {
+    const modal = document.getElementById('reflectionModal');
+    if (modal) modal.classList.remove('show');
+  }
+
+  async function callGemini(prompt, systemInstruction = "") {
+
+    if (!S.geminiApiKey) {
+      toast('Please set Gemini API key in Settings!', 'error');
+      showSettings();
+      return null;
+    }
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${S.geminiApiKey}`;
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: (systemInstruction ? systemInstruction + "\n\n" : "") + prompt }] }]
+        })
+      });
+      const data = await response.json();
+      if (data.error) throw new Error(data.error.message);
+      return data.candidates[0].content.parts[0].text;
+    } catch (e) {
+      console.error('Gemini error:', e);
+      toast('AI Error: ' + e.message, 'error');
+      return null;
+    }
+  }
+
 
   // =================== TOASTS ===================
   function toast(msg, type = 'info') {
@@ -343,7 +430,51 @@ const app = (() => {
     renderSuggestions();
     renderBurnoutAlert();
     renderStreakDisplay();
+    renderGarden();
   }
+
+  // =================== PRODUCTIVITY GARDEN ============
+  function renderGarden() {
+    const el = document.getElementById('gardenPlot');
+    const stats = document.getElementById('gardenStats');
+    const motto = document.getElementById('gardenMotto');
+    if (!el || !stats) return;
+
+    const slotCount = Math.max(5, Math.floor(S.xp / 20) + 3);
+    const plants = {
+      work: ['🌳', '🌲', '🌿', '🪵'],
+      health: ['🌻', '🌷', '🌸', '🍀'],
+      personal: ['🏠', '🏡', '🌵', '🪴'],
+      learning: ['📚', '📖', '🧪', '🧬']
+    };
+
+    const completed = S.goals.filter(g => g.completed).slice(-slotCount);
+    let html = '';
+    
+    for (let i = 0; i < slotCount; i++) {
+        if (i < completed.length) {
+            const g = completed[i];
+            const pList = plants[g.category] || plants.work;
+            const p = pList[i % pList.length];
+            html += `<div class="garden-slot new-plant" title="${g.title}">${p}</div>`;
+        } else {
+            html += `<div class="garden-slot" style="opacity: 0.15; filter: grayscale(1)">🌱</div>`;
+        }
+    }
+    
+    el.innerHTML = html;
+    const tier = S.level < 2 ? 'Seedling' : S.level < 4 ? 'Sprout' : S.level < 6 ? 'Garden' : 'Oasis';
+    stats.textContent = `${tier} (${S.streak} Day Streak)`;
+    
+    const mottos = [
+        "Small steps lead to big growth.",
+        "Consistency is the secret to a lush life.",
+        "Your productivity is blooming! ✨",
+        "Deep focus creates deep roots."
+    ];
+    motto.textContent = mottos[dayOfYear() % mottos.length];
+  }
+
 
   // =================== ANALYTICS MINI-PANEL ===================
   function renderAnalyticsMini() {
@@ -448,54 +579,45 @@ const app = (() => {
 
   // =================== AI COACH ===================
   const coachHistory = [];
-  function processCoachMessage(input) {
+  async function processCoachMessage(input) {
     const msg = input.trim().toLowerCase();
     if (!msg) return;
     coachHistory.push({ role: 'user', text: input.trim() });
-    let reply = '';
+    renderCoachMessages();
 
-    if (msg.includes('plan my day') || msg.includes('generate schedule') || msg.includes('create schedule')) {
+    // Check for local triggers first
+    if (msg.includes('plan my day') || msg.includes('generate schedule')) {
       generateSchedule();
-      reply = '📅 Done! I\'ve generated a smart schedule based on your goals. Check the AI Schedule tab!';
-    } else if (msg.includes('missed task') || msg.includes('reschedule') || msg.includes('missed tasks')) {
+      const reply = '📅 I\'ve generated a smart schedule based on your goals. Check the AI Schedule tab!';
+      coachHistory.push({ role: 'coach', text: reply });
+      renderCoachMessages();
+      return;
+    }
+    
+    if (msg.includes('reschedule') || msg.includes('missed task')) {
       rescheduleMissed();
-      reply = '🔄 I\'ve checked for missed tasks and rescheduled them. Your timeline is updated!';
-    } else if (msg.includes('recover') || msg.includes('recovery mode') || msg.includes('fix my day')) {
-      recoverDayMode();
-      reply = '🔧 Day Recovery activated! All incomplete tasks have been rescheduled into the remaining time.';
-    } else if (msg.includes('burnout') || msg.includes('am i overworked') || msg.includes('too much')) {
-      const b = AIScheduler.detectBurnout(S.schedule, S.goals);
-      if (b.isBurnout) {
-        reply = `⚠️ Burnout detected (${b.level} risk)!\n${b.warnings.join('\n')}\n\n💡 ${b.suggestions.join('\n💡 ')}`;
-      } else {
-        reply = '✅ Your workload looks balanced. No burnout risk detected. Keep it up!';
-      }
-    } else if (msg.includes('streak') || msg.includes('how am i doing')) {
-      reply = `🔥 Your current streak is ${S.streak} day(s)! Best ever: ${S.bestStreak} days. ${S.streak >= 7 ? 'You\'re on fire! 🔥' : S.streak >= 3 ? 'Nice momentum! ⚡' : 'Keep going! 💪'}`;
-    } else if (msg.includes('focus') || msg.includes('pomodoro') || msg.includes('timer')) {
-      reply = '🎯 Use the Focus button on any scheduled task for a 25-min focused session, or try the Pomodoro timer!';
-    } else if (msg.includes('how many') || msg.includes('stats') || msg.includes('analytics') || msg.includes('progress')) {
-      const done = S.goals.filter(g => g.completed).length;
-      const total = S.goals.length;
-      const pct = total > 0 ? Math.round(done / total * 100) : 0;
-      reply = `📊 Progress: ${done}/${total} goals completed (${pct}%). Focus time: ${S.pomo.totalMin}min. Streak: ${S.streak} days.`;
-    } else if (msg.includes('suggest') || msg.includes('what should i do') || msg.includes('advice')) {
-      const sug = AIScheduler.getSuggestions({ goals: S.goals, completedCount: S.goals.filter(g => g.completed).length, totalCount: S.goals.length, focusMinutes: S.pomo.totalMin, habits: S.habits });
-      reply = '💡 Here\'s my suggestion:\n' + sug.join('\n');
-    } else if (msg.includes('help') || msg.includes('what can you do')) {
-      reply = '🤖 I can help with:\n• "plan my day" — generate a schedule\n• "missed tasks" — reschedule missed tasks\n• "recover my day" — day recovery mode\n• "burnout check" — detect overwork\n• "how am I doing" — show stats\n• "streak" — check your streak\n• "suggest" — get smart suggestions\n• "focus" — focus timer tips';
-    } else {
-      const greetings = ['hi', 'hello', 'hey', 'yo', 'sup'];
-      if (greetings.some(g => msg.includes(g))) {
-        reply = `👋 Hey there! I'm your AI Coach. How can I help? Type "help" to see what I can do!`;
-      } else {
-        reply = `🤖 I'm not sure about that. Try "help" to see what I can assist with!`;
-      }
+      const reply = '🔄 I\'ve rescheduled your missed tasks. Your timeline is updated!';
+      coachHistory.push({ role: 'coach', text: reply });
+      renderCoachMessages();
+      return;
     }
 
-    coachHistory.push({ role: 'coach', text: reply });
-    renderCoachMessages();
-    return reply;
+    // Fallback to Gemini
+    const system = `You are "PlanAI Coach", a world-class productivity expert. 
+    Current State:
+    - Goals: ${S.goals.length} (${S.goals.filter(g=>g.completed).length} done)
+    - Focus Time: ${S.pomo.totalMin}m
+    - Streak: ${S.streak} days
+    Rules:
+    1. Be concise (max 3 sentences).
+    2. Use emojis.
+    3. If asked to "plan", "reschedule", or "recover", mention those specific commands work best.`;
+
+    const reply = await callGemini(input, system);
+    if (reply) {
+      coachHistory.push({ role: 'coach', text: reply });
+      renderCoachMessages();
+    }
   }
 
   function renderCoachMessages() {
@@ -511,11 +633,12 @@ const app = (() => {
     el.scrollTop = el.scrollHeight;
   }
 
-  function sendCoachMessage() {
+  async function sendCoachMessage() {
     const input = document.getElementById('coachInput');
     if (!input || !input.value.trim()) return;
-    processCoachMessage(input.value);
+    const text = input.value;
     input.value = '';
+    await processCoachMessage(text);
   }
 
   function toggleCoachBox() {
@@ -523,10 +646,11 @@ const app = (() => {
     if (!box) return;
     box.classList.toggle('coach-open');
     if (box.classList.contains('coach-open') && coachHistory.length === 0) {
-      coachHistory.push({ role: 'coach', text: '👋 Hi! I\'m your AI Coach. I can help plan your day, reschedule missed tasks, check burnout, and more. Type "help" to see all commands!' });
+      coachHistory.push({ role: 'coach', text: '👋 Hi! I\'m your Gemini-powered AI Coach. How can I help you stay productive today?' });
       renderCoachMessages();
     }
   }
+
 
   // =================== GOALS ===================
   function addGoal(title, duration, priority, category, urgent, recurrence, notes, difficulty) {
