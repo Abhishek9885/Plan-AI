@@ -1683,8 +1683,6 @@ const app = (() => {
       toast('Data exported successfully!', 'success');
     } catch (e) { toast('Export failed: ' + e.message, 'error') }
   }
-  }
-
 
   function handleImport(input) {
     const file = input.files && input.files[0];
