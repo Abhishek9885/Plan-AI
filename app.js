@@ -18,6 +18,8 @@ const app = (() => {
     },
     expandedGoals: {}, soundEnabled: true,
     xp: 0, level: 0, gold: 0, inventory: [], unlockedAchievements: [], totalZenMinutes: 0,
+    activeBuffs: { xpMultiplier: 1, goldMultiplier: 1, zenMultiplier: 1 },
+    weeklyReports: [],
     productivityScores: {},
     notificationsEnabled: false, focusMode: false,
     focusTimer: { taskId: null, taskTitle: '', running: false, timeLeft: 25 * 60, interval: null }
@@ -82,6 +84,22 @@ const app = (() => {
     { id: 'SCHEDULE_KING', title: '📅 Schedule King', desc: 'Generated 10 AI schedules', goal: 10, type: 'schedulesGenerated', icon: '👑' },
     { id: 'LEVEL_10', title: '📈 Rising Star', desc: 'Reached Level 10', goal: 10, type: 'level', icon: '🚀' },
     { id: 'FOCUS_LEGEND', title: '🏹 Focus Legend', desc: '300 minutes of total focus time', goal: 300, type: 'totalFocusMinutes', icon: '🎯' }
+  ];
+
+  const SHOP_ITEMS = [
+    { id: 'FERTILIZER', title: '🌿 Magic Fertilizer', desc: 'Boosts XP gain by 50% for 24 hours.', price: 50, type: 'buff', effect: { xpMultiplier: 1.5 }, icon: '🧪' },
+    { id: 'GOLDEN_SCYTHE', title: '🌾 Golden Scythe', desc: 'Earn 25% more Gold from quests.', price: 100, type: 'buff', effect: { goldMultiplier: 1.25 }, icon: '⚔️' },
+    { id: 'ZEN_INCENSE', title: '🕯️ Zen Incense', desc: 'Doubles Gold rewards from Zen mode.', price: 75, type: 'buff', effect: { zenMultiplier: 2.0 }, icon: '🧘' },
+    { id: 'CYBER_CORE', title: '💾 Cyber Core', desc: 'Unlocks the "Neon City" focus scene.', price: 150, type: 'scene', effect: 'scene_cyber', icon: '⚡' }
+  ];
+
+  const SCENES = [
+    { id: 'default', title: 'Default', icon: '🌑', class: '' },
+    { id: 'cafe', title: 'Cozy Café', icon: '☕', class: 'scene-cafe' },
+    { id: 'rain', title: 'Rainy Day', icon: '🌧️', class: 'scene-rain' },
+    { id: 'space', title: 'Deep Space', icon: '🌌', class: 'scene-space' },
+    { id: 'forest', title: 'Mystic Forest', icon: '🌲', class: 'scene-forest' },
+    { id: 'neon', title: 'Neon City', icon: '🏙️', class: 'scene-neon', locked: true }
   ];
 
   const QUOTES = [
@@ -370,7 +388,7 @@ const app = (() => {
     document.querySelectorAll('.mobile-nav-item').forEach(i => i.classList.toggle('active', i.dataset.view === v));
     document.querySelectorAll('.view').forEach(s => s.classList.toggle('active', s.id === `${v}-view`));
     
-    const titles = { dashboard: 'Dashboard', goals: 'My Goals', schedule: 'AI Schedule', habits: 'Habit Tracker', calendar: 'Calendar', analytics: 'Analytics', pomodoro: 'Pomodoro Timer' };
+    const titles = { dashboard: 'Dashboard', goals: 'My Goals', schedule: 'AI Schedule', habits: 'Habit Tracker', calendar: 'Calendar', analytics: 'Analytics', pomodoro: 'Pomodoro Timer', shop: 'Gold Shop' };
     document.getElementById('viewTitle').textContent = titles[v] || v;
     S.currentView = v;
     
@@ -383,6 +401,7 @@ const app = (() => {
     if (v === 'calendar') renderCalendar();
     if (v === 'analytics') renderAnalytics();
     if (v === 'pomodoro') renderPomoTaskSelect();
+    if (v === 'shop') renderShop();
     
     // Scroll to top on mobile
     if (window.innerWidth <= 768) window.scrollTo(0, 0);
@@ -592,6 +611,53 @@ const app = (() => {
     `;
   }
 
+  // =================== GOLD SHOP ===================
+  function renderShop() {
+    const el = document.getElementById('shopGrid');
+    if (!el) return;
+    el.innerHTML = SHOP_ITEMS.map(item => {
+      const isOwned = S.inventory.includes(item.id);
+      const canAfford = S.gold >= item.price;
+      return `
+        <div class="shop-card ${isOwned ? 'owned' : ''}">
+          <div class="shop-item-icon">${item.icon}</div>
+          <div class="shop-item-info">
+            <div class="shop-item-title">${item.title}</div>
+            <div class="shop-item-desc">${item.desc}</div>
+            <div class="shop-item-price">🪙 ${item.price} Gold</div>
+          </div>
+          <button class="btn ${isOwned ? 'btn-outline' : canAfford ? 'btn-primary' : 'btn-disabled'}" 
+            onclick="app.buyItem('${item.id}')" ${isOwned || !canAfford ? 'disabled' : ''}>
+            ${isOwned ? 'Purchased' : 'Buy Now'}
+          </button>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function buyItem(id) {
+    const item = SHOP_ITEMS.find(i => i.id === id);
+    if (!item || S.gold < item.price || S.inventory.includes(id)) return;
+
+    S.gold -= item.price;
+    S.inventory.push(id);
+    
+    if (item.type === 'buff') {
+      S.activeBuffs = { ...S.activeBuffs, ...item.effect };
+      toast(`✨ Activated ${item.title}!`, 'success');
+    } else if (item.type === 'scene') {
+      const sceneId = item.effect.replace('scene_','');
+      const scene = SCENES.find(s => s.id === sceneId);
+      if (scene) scene.locked = false;
+      toast(`🌌 Focus Scene unlocked!`, 'success');
+    }
+
+    playSound('level');
+    save();
+    renderShop();
+    if (document.getElementById('userGold')) animateValue(document.getElementById('userGold'), S.gold);
+  }
+
   // =================== DAY RECOVERY MODE ===================
   function recoverDayMode() {
     if (!S.schedule.length) { toast('No schedule to recover!', 'error'); return; }
@@ -791,8 +857,10 @@ const app = (() => {
   }
 
   function awardGold(amount, reason = "") {
-    S.gold += amount;
-    S.analytics.totalGoldEarned = (S.analytics.totalGoldEarned || 0) + amount;
+    const multiplier = S.activeBuffs.goldMultiplier || 1;
+    const finalAmount = Math.round(amount * multiplier);
+    S.gold += finalAmount;
+    S.analytics.totalGoldEarned = (S.analytics.totalGoldEarned || 0) + finalAmount;
     const el = document.getElementById('userGold');
     if (el) {
       animateValue(el, S.gold);
@@ -1594,6 +1662,49 @@ const app = (() => {
     document.querySelectorAll('.ambient-btn').forEach(b=>b.classList.remove('active'));
   }
   function toggleFocusMode() { S.focusMode ? exitFocusMode() : enterFocusMode(); }
+  
+  function setFocusScene(sceneId) {
+    const scene = SCENES.find(s => s.id === sceneId);
+    const overlay = document.getElementById('focusOverlay');
+    if (!scene || !overlay) return;
+    
+    // Remove all scene classes
+    SCENES.forEach(s => { if (s.class) overlay.classList.remove(s.class); });
+    
+    // Add new scene class
+    if (scene.class) overlay.classList.add(scene.class);
+    
+    // Sync ambient sound if applicable
+    if (sceneId === 'cafe') toggleFocusAmbient('cafe');
+    else if (sceneId === 'rain') toggleFocusAmbient('rain');
+    else if (ambientState.source) toggleFocusAmbient(ambientState.type); // stop current
+    
+    save();
+    toast(`Focus Scene: ${scene.title}`, 'info');
+    renderFocusScenes(); // update active state
+  }
+
+  function renderFocusScenes() {
+    const el = document.getElementById('focusScenesGrid');
+    if (!el) return;
+    
+    // Find active scene by class on overlay
+    const overlay = document.getElementById('focusOverlay');
+    const activeScene = SCENES.find(s => s.class && overlay.classList.contains(s.class)) || SCENES[0];
+
+    el.innerHTML = SCENES.map(s => {
+      const isOwned = !s.locked || S.inventory.includes('CYBER_CORE'); // Hardcoded for Demo, expand as needed
+      const isActive = activeScene.id === s.id;
+      
+      return `
+        <div class="scene-btn ${isActive ? 'active' : ''} ${!isOwned ? 'locked' : ''}" 
+             onclick="${isOwned ? `app.setFocusScene('${s.id}')` : ''}">
+          <div class="scene-icon">${isOwned ? s.icon : '🔒'}</div>
+          <div class="scene-label">${s.title}</div>
+        </div>
+      `;
+    }).join('');
+  }
   function updateFocusTimerDisplay() {
     const el=document.getElementById('focusTimerDisplay');
     if(el&&S.focusMode){const m=Math.floor(S.pomo.timeLeft/60),s=S.pomo.timeLeft%60;el.textContent=`${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`; }
@@ -1607,8 +1718,10 @@ const app = (() => {
   ];
   function getLevel(xp) { let lv=0; for(let i=XP_LEVELS.length-1;i>=0;i--){if(xp>=XP_LEVELS[i].min){lv=i;break;}} return lv; }
   function awardXP(amount, reason) {
-    const oldLv=getLevel(S.xp); S.xp+=amount; S.level=getLevel(S.xp); save();
-    showXPFloat(amount);
+    const multiplier = S.activeBuffs.xpMultiplier || 1;
+    const finalAmount = Math.round(amount * multiplier);
+    const oldLv=getLevel(S.xp); S.xp+=finalAmount; S.level=getLevel(S.xp); save();
+    showXPFloat(finalAmount);
     if(S.level>oldLv){const lv=XP_LEVELS[S.level];toast(`\ud83c\udf89 Level Up! ${lv.icon} ${lv.name}!`,'success');setTimeout(launchConfetti,200);}
     renderXPBar();
   }
@@ -1616,6 +1729,58 @@ const app = (() => {
     const el=document.createElement('div');el.className='xp-float';el.textContent=`+${amount} XP`;
     document.body.appendChild(el);setTimeout(()=>el.remove(),1500);
   }
+  function getWeeklyStats() {
+    const dates = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      dates.push(d.toISOString().split('T')[0]);
+    }
+    
+    let totalCompleted = 0, totalFocus = 0;
+    dates.forEach(d => {
+      totalCompleted += S.analytics.dailyCompleted[d] || 0;
+      totalFocus += S.analytics.dailyFocus[d] || 0;
+    });
+
+    return { totalCompleted, totalFocus, days: 7 };
+  }
+
+  async function generateWeeklyReview() {
+    const stats = getWeeklyStats();
+    const overlay = document.getElementById('weeklyReportOverlay');
+    const content = document.getElementById('weeklyReportContent');
+    if (!overlay || !content) return;
+
+    overlay.classList.add('show');
+    content.innerHTML = '<div class="loading-spinner"></div><p style="text-align:center;color:var(--text-secondary);">Analyzing your performance data...</p>';
+
+    const prompt = `Analyze my productivity for the last 7 days:
+- Tasks Completed: ${stats.totalCompleted}
+- Total Deep Focus Time: ${Math.round(stats.totalFocus)} minutes
+- Current Level: ${S.level}
+- Current Streak: ${S.streak}
+
+Please provide:
+1. A Letter Grade (A to F).
+2. A summarizing motivational paragraph.
+3. 3 specific, actionable pieces of advice for next week.
+Format as Markdown with bold headings.`;
+
+    try {
+      const res = await callGemini(prompt);
+      if (res.error === 'NO_API_KEY') {
+        content.innerHTML = '<div class="error-msg">⚠️ Missing API Key. Please add your Gemini API key in Settings to generate AI reports.</div>';
+        return;
+      }
+      content.innerHTML = `<div class="report-text">${res.text}</div>`;
+      S.weeklyReports.push({ date: today(), text: res.text, stats });
+      save();
+    } catch (e) {
+      content.innerHTML = `<div class="error-msg">Failed to generate report. Please try again later.</div>`;
+    }
+  }
+
   function renderXPBar() {
     const lv=XP_LEVELS[S.level],next=XP_LEVELS[S.level+1];
     const badge=document.getElementById('levelBadge'),fill=document.getElementById('xpBarFill');
