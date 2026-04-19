@@ -2155,12 +2155,14 @@ const app = (() => {
     showDayDetail, changeMonth,
     pomoToggle, pomoReset,
     showShortcuts, closeShortcuts,
+    showSettings, saveSettings, closeSettings,
     toggleTheme, exportData, handleImport,
     toggleFocusMode, enterFocusMode, exitFocusMode, toggleFocusAmbient,
     signInWithGoogle, signOut,
     startTaskFocus, closeTaskFocus, toggleTaskFocusPause,
     sendCoachMessage, toggleCoachBox, openMobileMenu, closeMobileMenu,
-    openZenMode, closeZenMode, toggleZenActive
+    openZenMode, closeZenMode, toggleZenActive,
+    generateWeeklyReview, generateDailyReflection, requestNotifications
   };
 })();
 
