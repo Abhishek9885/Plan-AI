@@ -12,7 +12,8 @@ const app = (() => {
     pomo: { mode: 'work', running: false, timeLeft: 25 * 60, sessions: 0, totalMin: 0, linkedGoal: '' },
     analytics: { dailyCompleted: {}, dailyFocus: {}, totalCreated: 0, totalCompleted: 0 },
     expandedGoals: {}, soundEnabled: true,
-    xp: 0, level: 0, productivityScores: {},
+    xp: 0, level: 0, gold: 0, inventory: [], unlockedAchievements: [], totalZenMinutes: 0,
+    productivityScores: {},
     notificationsEnabled: false, focusMode: false,
     focusTimer: { taskId: null, taskTitle: '', running: false, timeLeft: 25 * 60, interval: null }
   };
@@ -59,6 +60,16 @@ const app = (() => {
 
 
   // =================== QUOTES (30+ for variety) ===================
+  // =================== RPG & ACHIEVEMENTS ===================
+  const ACHIEVEMENTS = [
+    { id: 'FIRST_QUEST', title: '⚔️ First Blood', desc: 'Completed your first quest', goal: 1, type: 'totalCompleted', icon: '🥇' },
+    { id: 'STREAK_3', title: '🔥 Persistence', desc: 'Reached a 3-day streak', goal: 3, type: 'streak', icon: '🥉' },
+    { id: 'STREAK_7', title: '🦅 Soaring High', desc: 'Reached a 7-day streak', goal: 7, type: 'streak', icon: '🥈' },
+    { id: 'DEEP_DIVER', title: '🤿 Deep Diver', desc: 'Completed 5 Hard difficulty tasks', goal: 5, type: 'hardTasks', icon: '💎' },
+    { id: 'ZEN_MASTER', title: '🧘 Zen Master', desc: 'Completed 30 minutes of breathwork', goal: 30, type: 'zenMinutes', icon: '🌌' },
+    { id: 'EARLY_BIRD', title: '🌅 Early Bird', desc: 'Completed a task before 8 AM', goal: 1, type: 'earlyTask', icon: '☀️' }
+  ];
+
   const QUOTES = [
     { t: "The secret of getting ahead is getting started.", a: "Mark Twain" },
     { t: "Either you run the day, or the day runs you.", a: "Jim Rohn" },
@@ -192,7 +203,9 @@ const app = (() => {
       goals: S.goals, habits: S.habits, schedule: S.schedule, scheduleCompleted: S.scheduleCompleted,
       streak: S.streak, bestStreak: S.bestStreak, lastActiveDate: S.lastActiveDate, scheduledDates: S.scheduledDates,
       analytics: S.analytics, pomo: { sessions: S.pomo.sessions, totalMin: S.pomo.totalMin },
-      xp: S.xp, level: S.level, productivityScores: S.productivityScores
+      xp: S.xp, level: S.level, gold: S.gold, inventory: S.inventory,
+      unlockedAchievements: S.unlockedAchievements, totalZenMinutes: S.totalZenMinutes,
+      productivityScores: S.productivityScores
     }));
     if (S.geminiApiKey) localStorage.setItem('planai_gemini_key', S.geminiApiKey);
   }
@@ -213,6 +226,10 @@ const app = (() => {
       if (d.pomo) { S.pomo.sessions = d.pomo.sessions || 0; S.pomo.totalMin = d.pomo.totalMin || 0 }
       if (typeof d.xp === 'number') S.xp = d.xp;
       if (typeof d.level === 'number') S.level = d.level;
+      if (typeof d.gold === 'number') S.gold = d.gold;
+      if (d.inventory) S.inventory = d.inventory;
+      if (d.unlockedAchievements) S.unlockedAchievements = d.unlockedAchievements;
+      if (typeof d.totalZenMinutes === 'number') S.totalZenMinutes = d.totalZenMinutes;
       if (d.productivityScores) S.productivityScores = d.productivityScores;
     } catch (e) { }
   }
@@ -728,12 +745,43 @@ const app = (() => {
         const td = today();
         S.analytics.dailyCompleted[td] = (S.analytics.dailyCompleted[td] || 0) + 1;
         S.analytics.dailyFocus[td] = (S.analytics.dailyFocus[td] || 0) + g.duration;
-        const xpMap = { high: 50, medium: 25, low: 10 };
-        awardXP(xpMap[g.priority] || 25, g.title);
+        
+        const rewards = awardRewards(g.priority, g.difficulty || 'medium');
+        awardXP(rewards.xp, g.title);
+        awardGold(rewards.gold, g.title);
+        
+        checkAchievements();
       }
       save(); renderGoals(); renderDashboard();
       if (S.goals.length > 0 && S.goals.every(x => x.completed)) setTimeout(launchConfetti, 300);
     }
+  }
+
+  function awardRewards(priority, difficulty) {
+    const xpMap = { high: 50, medium: 25, low: 10 };
+    const goldMap = { high: 30, medium: 15, low: 5 };
+    const diffBonus = { easy: 1, medium: 1.5, hard: 2.5 };
+    
+    const baseXP = xpMap[priority] || 25;
+    const baseGold = goldMap[priority] || 15;
+    const bonus = diffBonus[difficulty] || 1.5;
+    
+    return {
+      xp: Math.round(baseXP * bonus),
+      gold: Math.round(baseGold * bonus)
+    };
+  }
+
+  function awardGold(amount, reason = "") {
+    S.gold += amount;
+    const el = document.getElementById('userGold');
+    if (el) {
+      animateValue(el, S.gold);
+      el.classList.add('gold-bump');
+      setTimeout(() => el.classList.remove('gold-bump'), 500);
+    }
+    if (reason) toast(`🪙 Received ${amount} Gold for: ${reason}`, 'success');
+    save();
   }
   function addSubtask(goalId, text) {
     const g = S.goals.find(x => x.id === goalId);
@@ -1738,7 +1786,151 @@ const app = (() => {
     // Update focus timer in sync with pomodoro
     const origUpdate = updatePomoDisplay;
     const patchedUpdate = () => { origUpdate(); updateFocusTimerDisplay(); };
-    // Patch the interval callback indirectly via the existing pomoInterval
+    
+    // Initial renders
+    renderAchievementsWall();
+    if (document.getElementById('userGold')) animateValue(document.getElementById('userGold'), S.gold);
+  }
+
+  function checkAchievements() {
+    let unlocked = false;
+    const hardTasks = S.goals.filter(g => g.completed && g.difficulty === 'hard').length;
+    const stats = {
+      totalCompleted: S.analytics.totalCompleted,
+      streak: S.streak,
+      hardTasks: hardTasks,
+      zenMinutes: S.totalZenMinutes,
+      earlyTask: S.analytics.earlyFinished || 0
+    };
+
+    ACHIEVEMENTS.forEach(a => {
+      if (!S.unlockedAchievements.includes(a.id) && stats[a.type] >= a.goal) {
+        S.unlockedAchievements.push(a.id);
+        launchAchievementModal(a);
+        unlocked = true;
+      }
+    });
+
+    if (unlocked) {
+      save();
+      renderAchievementsWall();
+    }
+  }
+
+  function launchAchievementModal(a) {
+    playSound('level');
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay show';
+    overlay.style.zIndex = '2000';
+    overlay.innerHTML = `
+      <div class="modal achievement-popup" style="text-align:center; padding: 40px; background: var(--bg-secondary); border: 2px solid var(--primary);">
+        <div class="achievement-zoom-icon" style="font-size: 80px; margin-bottom: 20px;">${a.icon}</div>
+        <h2 style="background: var(--gradient-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">ACHIEVEMENT UNLOCKED!</h2>
+        <h3 style="margin: 10px 0;">${a.title}</h3>
+        <p style="color: var(--text-secondary); margin-bottom: 25px;">${a.desc}</p>
+        <button class="btn btn-primary btn-lg" onclick="this.parentElement.parentElement.remove()">AWESOME!</button>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    launchConfetti();
+  }
+
+  function renderAchievementsWall() {
+    const el = document.getElementById('achievementsWall');
+    if (!el) return;
+    el.innerHTML = ACHIEVEMENTS.map(a => {
+      const isLocked = !S.unlockedAchievements.includes(a.id);
+      return `
+        <div class="achievement-badge ${isLocked ? 'locked' : ''}">
+          <div class="achievement-icon">${isLocked ? '🔒' : a.icon}</div>
+          <div class="achievement-info">
+            <div class="achievement-name">${a.title}</div>
+            <div class="achievement-desc">${a.desc}</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // =================== ZEN MODE ===================
+  let zenInterval = null;
+  let zenTimeRemaining = 5 * 60;
+  let zenActive = false;
+  let zenPhaseIndex = 0; // 0: Inhale, 1: Hold, 2: Exhale, 3: Hold
+
+  function openZenMode() {
+    const ov = document.getElementById('zenOverlay');
+    ov.style.display = 'flex';
+    zenTimeRemaining = 5 * 60;
+    zenActive = false;
+    zenPhaseIndex = 0;
+    updateZenUI();
+    document.getElementById('zenStartBtn').textContent = 'Start Session';
+  }
+
+  function closeZenMode() {
+    const ov = document.getElementById('zenOverlay');
+    ov.style.display = 'none';
+    if (zenInterval) clearInterval(zenInterval);
+    zenActive = false;
+  }
+
+  function toggleZenActive() {
+    if (zenActive) {
+      zenActive = false;
+      clearInterval(zenInterval);
+      document.getElementById('zenStartBtn').textContent = 'Resume';
+    } else {
+      zenActive = true;
+      document.getElementById('zenStartBtn').textContent = 'Pause';
+      zenInterval = setInterval(updateZenMode, 1000);
+    }
+  }
+
+  function updateZenMode() {
+    zenTimeRemaining--;
+    if (zenTimeRemaining <= 0) {
+      clearInterval(zenInterval);
+      zenActive = false;
+      S.totalZenMinutes += 5;
+      awardXP(50, '5-min Zen Session');
+      awardGold(20, 'Zen Focus');
+      toast('🧘 Deep focus session complete!', 'success');
+      checkAchievements();
+      closeZenMode();
+      return;
+    }
+
+    // Box Breathing (4-4-4-4)
+    const cyclePos = (300 - zenTimeRemaining) % 16;
+    if (cyclePos === 0) updateZenPhase(0); // Inhale
+    else if (cyclePos === 4) updateZenPhase(1); // Hold
+    else if (cyclePos === 8) updateZenPhase(2); // Exhale
+    else if (cyclePos === 12) updateZenPhase(3); // Hold
+
+    updateZenUI();
+  }
+
+  function updateZenPhase(idx) {
+    zenPhaseIndex = idx;
+    const phases = ['Inhale Deeply', 'Hold Breath', 'Exhale Slowly', 'Hold Empty'];
+    const circle = document.getElementById('zenCircle');
+    const label = document.getElementById('zenPhase');
+    const instr = document.getElementById('zenInstruction');
+    
+    label.textContent = phases[idx];
+    circle.className = 'zen-circle phase-' + idx;
+    
+    if (idx === 0) instr.textContent = 'Fill your lungs with positive energy...';
+    else if (idx === 1) instr.textContent = 'Maintain the focus...';
+    else if (idx === 2) instr.textContent = 'Release all stress and tension...';
+    else if (idx === 3) instr.textContent = 'Feel the stillness...';
+  }
+
+  function updateZenUI() {
+    const m = Math.floor(zenTimeRemaining / 60);
+    const s = zenTimeRemaining % 60;
+    document.getElementById('zenTimer').textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   }
 
   return {
@@ -1755,7 +1947,8 @@ const app = (() => {
     toggleFocusMode, enterFocusMode, exitFocusMode, toggleFocusAmbient,
     signInWithGoogle, signOut,
     startTaskFocus, closeTaskFocus, toggleTaskFocusPause,
-    sendCoachMessage, toggleCoachBox, openMobileMenu, closeMobileMenu
+    sendCoachMessage, toggleCoachBox, openMobileMenu, closeMobileMenu,
+    openZenMode, closeZenMode, toggleZenActive
   };
 })();
 
