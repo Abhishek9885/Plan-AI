@@ -559,6 +559,9 @@
         <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="G" style="width:18px;height:18px;margin-right:8px;vertical-align:middle;">
         Sign in with Google
       </button>
+      <button class="btn btn-outline auth-btn" style="width:100%; margin-top:12px; height:50px" onclick="document.getElementById('authOverlay').classList.add('auth-hidden')">
+        Continue as Guest
+      </button>
     </div>
   </div>
 
@@ -590,6 +593,29 @@
       </div>
     </div>
   </div>
+  <!-- MOBILE NAV (Bottom Bar) -->
+  <nav class="mobile-nav" id="mobileNav">
+    <div class="mobile-nav-item active" data-view="dashboard">
+      <span class="mobile-nav-icon">📊</span>
+      <span class="mobile-nav-label">Home</span>
+    </div>
+    <div class="mobile-nav-item" data-view="goals">
+      <span class="mobile-nav-icon">🎯</span>
+      <span class="mobile-nav-label">Goals</span>
+    </div>
+    <div class="mobile-nav-item" data-view="schedule">
+      <span class="mobile-nav-icon">🤖</span>
+      <span class="mobile-nav-label">Plan</span>
+    </div>
+    <div class="mobile-nav-item" data-view="habits">
+      <span class="mobile-nav-icon">✨</span>
+      <span class="mobile-nav-label">Habits</span>
+    </div>
+    <div class="mobile-nav-item" onclick="app.openMobileMenu()">
+      <span class="mobile-nav-icon">☰</span>
+      <span class="mobile-nav-label">Menu</span>
+    </div>
+  </nav>
 
 </body>
 

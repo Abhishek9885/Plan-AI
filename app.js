@@ -252,12 +252,15 @@ const app = (() => {
   // =================== VIEW SWITCHING ===================
   function switchView(v) {
     document.querySelectorAll('.nav-item').forEach(i => i.classList.toggle('active', i.dataset.view === v));
+    document.querySelectorAll('.mobile-nav-item').forEach(i => i.classList.toggle('active', i.dataset.view === v));
     document.querySelectorAll('.view').forEach(s => s.classList.toggle('active', s.id === `${v}-view`));
+    
     const titles = { dashboard: 'Dashboard', goals: 'My Goals', schedule: 'AI Schedule', habits: 'Habit Tracker', calendar: 'Calendar', analytics: 'Analytics', pomodoro: 'Pomodoro Timer' };
     document.getElementById('viewTitle').textContent = titles[v] || v;
     S.currentView = v;
-    document.getElementById('sidebar').classList.remove('open');
-    document.getElementById('sidebarOverlay').classList.remove('show');
+    
+    closeMobileMenu();
+    
     if (v === 'dashboard') renderDashboard();
     if (v === 'goals') renderGoals();
     if (v === 'schedule') renderSchedule();
@@ -265,6 +268,19 @@ const app = (() => {
     if (v === 'calendar') renderCalendar();
     if (v === 'analytics') renderAnalytics();
     if (v === 'pomodoro') renderPomoTaskSelect();
+    
+    // Scroll to top on mobile
+    if (window.innerWidth <= 768) window.scrollTo(0, 0);
+  }
+
+  function openMobileMenu() {
+    document.getElementById('sidebar').classList.add('open');
+    document.getElementById('sidebarOverlay').classList.add('show');
+  }
+
+  function closeMobileMenu() {
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('sidebarOverlay').classList.remove('show');
   }
 
   // =================== WEATHER ===================
@@ -1456,9 +1472,11 @@ const app = (() => {
 
     // Nav clicks
     document.querySelectorAll('.nav-item').forEach(i => i.addEventListener('click', () => switchView(i.dataset.view)));
+    document.querySelectorAll('.mobile-nav-item[data-view]').forEach(i => i.addEventListener('click', () => switchView(i.dataset.view)));
+    
     const menuToggle = document.getElementById('menuToggle');
-    if (menuToggle) menuToggle.addEventListener('click', () => { document.getElementById('sidebar').classList.toggle('open'); document.getElementById('sidebarOverlay').classList.toggle('show') });
-    document.getElementById('sidebarOverlay').addEventListener('click', () => { document.getElementById('sidebar').classList.remove('open'); document.getElementById('sidebarOverlay').classList.remove('show') });
+    if (menuToggle) menuToggle.addEventListener('click', openMobileMenu);
+    document.getElementById('sidebarOverlay').addEventListener('click', closeMobileMenu);
 
     // Quick add
     document.getElementById('quickAddForm').addEventListener('submit', e => {
@@ -1563,9 +1581,9 @@ const app = (() => {
     showShortcuts, closeShortcuts,
     toggleTheme, exportData, handleImport,
     toggleFocusMode, enterFocusMode, exitFocusMode, toggleFocusAmbient,
-    requestNotifications, signInWithGoogle, signOut,
+    signInWithGoogle, signOut,
     startTaskFocus, closeTaskFocus, toggleTaskFocusPause,
-    sendCoachMessage, toggleCoachBox
+    sendCoachMessage, toggleCoachBox, openMobileMenu, closeMobileMenu
   };
 })();
 
