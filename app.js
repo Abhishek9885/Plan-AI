@@ -10,7 +10,12 @@ const app = (() => {
     streak: 0, bestStreak: 0, lastActiveDate: null, scheduledDates: {},
     theme: localStorage.getItem('planai_theme') || 'dark',
     pomo: { mode: 'work', running: false, timeLeft: 25 * 60, sessions: 0, totalMin: 0, linkedGoal: '' },
-    analytics: { dailyCompleted: {}, dailyFocus: {}, totalCreated: 0, totalCompleted: 0 },
+    analytics: { 
+      dailyCompleted: {}, dailyFocus: {}, 
+      totalCreated: 0, totalCompleted: 0,
+      pomoSessions: 0, totalGoldEarned: 0,
+      schedulesGenerated: 0, earlyTasks: 0, lateTasks: 0
+    },
     expandedGoals: {}, soundEnabled: true,
     xp: 0, level: 0, gold: 0, inventory: [], unlockedAchievements: [], totalZenMinutes: 0,
     productivityScores: {},
@@ -67,7 +72,16 @@ const app = (() => {
     { id: 'STREAK_7', title: '🦅 Soaring High', desc: 'Reached a 7-day streak', goal: 7, type: 'streak', icon: '🥈' },
     { id: 'DEEP_DIVER', title: '🤿 Deep Diver', desc: 'Completed 5 Hard difficulty tasks', goal: 5, type: 'hardTasks', icon: '💎' },
     { id: 'ZEN_MASTER', title: '🧘 Zen Master', desc: 'Completed 30 minutes of breathwork', goal: 30, type: 'zenMinutes', icon: '🌌' },
-    { id: 'EARLY_BIRD', title: '🌅 Early Bird', desc: 'Completed a task before 8 AM', goal: 1, type: 'earlyTask', icon: '☀️' }
+    { id: 'ZEN_SENSEI', title: '🎋 Zen Sensei', desc: 'Completed 60 minutes of breathwork', goal: 60, type: 'zenMinutes', icon: '👘' },
+    { id: 'EARLY_BIRD', title: '🌅 Early Bird', desc: 'Completed a task before 8 AM', goal: 1, type: 'earlyTasks', icon: '☀️' },
+    { id: 'PRO_PLANNER', title: '🎖️ Pro Planner', desc: 'Complete 50 total quests', goal: 50, type: 'totalCompleted', icon: '🏰' },
+    { id: 'POMO_ELITE', title: '⏳ Pomo Elite', desc: 'Completed 20 focus sessions', goal: 20, type: 'pomoSessions', icon: '🏮' },
+    { id: 'GOLD_MINER', title: '💰 Gold Miner', desc: 'Accumulated 500 Gold', goal: 500, type: 'totalGoldEarned', icon: '🪙' },
+    { id: 'NIGHT_OWL', title: '🦉 Night Owl', desc: 'Completed 5 late night quests', goal: 5, type: 'lateTasks', icon: '🌙' },
+    { id: 'STREAK_15', title: '🔥 Persistence Pro', desc: 'Reached a 15-day streak', goal: 15, type: 'streak', icon: '🌋' },
+    { id: 'SCHEDULE_KING', title: '📅 Schedule King', desc: 'Generated 10 AI schedules', goal: 10, type: 'schedulesGenerated', icon: '👑' },
+    { id: 'LEVEL_10', title: '📈 Rising Star', desc: 'Reached Level 10', goal: 10, type: 'level', icon: '🚀' },
+    { id: 'FOCUS_LEGEND', title: '🏹 Focus Legend', desc: '300 minutes of total focus time', goal: 300, type: 'totalFocusMinutes', icon: '🎯' }
   ];
 
   const QUOTES = [
@@ -746,6 +760,10 @@ const app = (() => {
         S.analytics.dailyCompleted[td] = (S.analytics.dailyCompleted[td] || 0) + 1;
         S.analytics.dailyFocus[td] = (S.analytics.dailyFocus[td] || 0) + g.duration;
         
+        const hour = new Date().getHours();
+        if (hour < 8) S.analytics.earlyTasks = (S.analytics.earlyTasks || 0) + 1;
+        if (hour >= 22) S.analytics.lateTasks = (S.analytics.lateTasks || 0) + 1;
+
         const rewards = awardRewards(g.priority, g.difficulty || 'medium');
         awardXP(rewards.xp, g.title);
         awardGold(rewards.gold, g.title);
@@ -774,6 +792,7 @@ const app = (() => {
 
   function awardGold(amount, reason = "") {
     S.gold += amount;
+    S.analytics.totalGoldEarned = (S.analytics.totalGoldEarned || 0) + amount;
     const el = document.getElementById('userGold');
     if (el) {
       animateValue(el, S.gold);
@@ -892,6 +911,7 @@ const app = (() => {
     const peakHours = peakSel ? peakSel.value : 'morning';
     S.schedule = AIScheduler.generateSmartSchedule(active, { peakHours });
     S.scheduleCompleted = {}; S.scheduledDates[today()] = S.schedule;
+    S.analytics.schedulesGenerated = (S.analytics.schedulesGenerated || 0) + 1;
     save(); toast('AI smart schedule generated! 🚀', 'success'); renderSchedule(); renderDashboard();
   }
   function renderSchedule() {
@@ -1303,8 +1323,10 @@ const app = (() => {
       if (S.pomo.timeLeft <= 0) {
         pomoStop(); playSound('timer');
         if (S.pomo.mode === 'work') {
-          S.pomo.sessions++; S.pomo.totalMin += POMO_TIMES.work / 60;
-          awardXP(15, 'Pomodoro');
+          S.pomo.sessions++; 
+          S.pomo.totalMin += POMO_TIMES.work / 60;
+          awardXP(S.pomo.sessions % 4 === 0 ? 30 : 15, 'Pomodoro');
+          S.analytics.pomoSessions = (S.analytics.pomoSessions || 0) + 1;
           save(); toast('🍅 Pomodoro complete! Take a break.', 'success');
           setPomoMode(S.pomo.sessions % 4 === 0 ? 'long' : 'short');
           if (S.notificationsEnabled && 'Notification' in window && Notification.permission === 'granted') {
@@ -1795,12 +1817,19 @@ const app = (() => {
   function checkAchievements() {
     let unlocked = false;
     const hardTasks = S.goals.filter(g => g.completed && g.difficulty === 'hard').length;
+    const totalFocus = Object.values(S.analytics.dailyFocus).reduce((a, b) => a + b, 0);
     const stats = {
       totalCompleted: S.analytics.totalCompleted,
       streak: S.streak,
       hardTasks: hardTasks,
       zenMinutes: S.totalZenMinutes,
-      earlyTask: S.analytics.earlyFinished || 0
+      earlyTasks: S.analytics.earlyTasks || 0,
+      lateTasks: S.analytics.lateTasks || 0,
+      pomoSessions: S.analytics.pomoSessions || 0,
+      totalGoldEarned: S.analytics.totalGoldEarned || 0,
+      schedulesGenerated: S.analytics.schedulesGenerated || 0,
+      level: S.level,
+      totalFocusMinutes: totalFocus
     };
 
     ACHIEVEMENTS.forEach(a => {
