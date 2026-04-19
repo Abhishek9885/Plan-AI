@@ -25,7 +25,8 @@ const app = (() => {
     focusTimer: { taskId: null, taskTitle: '', running: false, timeLeft: 25 * 60, interval: null },
     orchestration: { lastCheck: null, modalOpen: false, ignoreToday: false },
     raid: { active: false, boss: null, personalDamage: 0, leaderboard: [], activity: [] },
-    equippedGear: { head: null, weapon: null, chest: null }
+    equippedGear: { head: null, weapon: null, chest: null },
+    history: []
   };
   let pomoInterval = null;
   const ambientState = { ctx: null, source: null, gain: null, type: null };
@@ -459,7 +460,7 @@ const app = (() => {
       analytics: S.analytics, pomo: { sessions: S.pomo.sessions, totalMin: S.pomo.totalMin },
       xp: S.xp, level: S.level, gold: S.gold, inventory: S.inventory,
       unlockedAchievements: S.unlockedAchievements, totalZenMinutes: S.totalZenMinutes,
-      productivityScores: S.productivityScores
+      productivityScores: S.productivityScores, history: S.history || []
     }));
     if (S.geminiApiKey) localStorage.setItem('planai_gemini_key', S.geminiApiKey);
   }
@@ -480,11 +481,14 @@ const app = (() => {
       if (d.pomo) { S.pomo.sessions = d.pomo.sessions || 0; S.pomo.totalMin = d.pomo.totalMin || 0 }
       if (typeof d.xp === 'number') S.xp = d.xp;
       if (typeof d.level === 'number') S.level = d.level;
-      if (typeof d.gold === 'number') S.gold = d.gold;
       if (d.inventory) S.inventory = d.inventory;
       if (d.unlockedAchievements) S.unlockedAchievements = d.unlockedAchievements;
       if (typeof d.totalZenMinutes === 'number') S.totalZenMinutes = d.totalZenMinutes;
       if (d.productivityScores) S.productivityScores = d.productivityScores;
+      if (d.history) S.history = d.history;
+      if (typeof d.xp === 'number') S.xp = d.xp;
+      if (typeof d.level === 'number') S.level = d.level;
+      if (typeof d.gold === 'number') S.gold = d.gold;
     } catch (e) { }
   }
 
@@ -558,12 +562,52 @@ const app = (() => {
   // =================== STREAK ===================
   function updateStreak() {
     const td = today();
-    if (S.lastActiveDate === td) return;
+    if (S.lastActiveDate && S.lastActiveDate !== td) {
+      performDailyRollover();
+    }
+
     const y = new Date(); y.setDate(y.getDate() - 1);
     const ys = `${y.getFullYear()}-${String(y.getMonth() + 1).padStart(2, '0')}-${String(y.getDate()).padStart(2, '0')}`;
     S.streak = S.lastActiveDate === ys ? S.streak + 1 : 1;
     if (S.streak > S.bestStreak) S.bestStreak = S.streak;
     S.lastActiveDate = td; save();
+  }
+
+  function performDailyRollover() {
+    console.log("🌅 [Daily Rollover] Refreshing workspace...");
+    
+    // 1. Archive non-recurring completed goals
+    const completedGoals = S.goals.filter(g => g.completed && g.recurrence === 'none');
+    if (completedGoals.length > 0) {
+      const archiveItems = completedGoals.map(g => ({
+        id: g.id,
+        title: g.title,
+        priority: g.priority,
+        category: g.category,
+        completedAt: g.completedAt || new Date().toISOString(),
+        duration: g.duration
+      }));
+      S.history = [...(S.history || []), ...archiveItems];
+      
+      // Remove them from active list
+      S.goals = S.goals.filter(g => !completedGoals.find(cg => cg.id === g.id));
+    }
+
+    // 2. Reset recurring goals (handled by processRecurringGoals usually, but we ensure here)
+    S.goals.forEach(g => {
+      if (g.recurrence !== 'none') {
+        g.completed = false;
+        delete g.completedAt;
+      }
+    });
+
+    // 3. Clear daily transient data
+    S.schedule = [];
+    S.scheduleCompleted = {};
+    S.orchestration.ignoreToday = false;
+    
+    save();
+    toast('✨ New day, new goals! Workspace refreshed.', 'success');
   }
 
   // =================== THEME (FIXED) ===================
@@ -2219,6 +2263,60 @@ Use Emojis. Be encouraging but honest like a high-end silicon valley coach.`;
     ].join('');
   }
 
+    save();
+  }
+
+  function showQuestLog() {
+    renderQuestLog();
+    const modal = document.getElementById('historyModal');
+    if (modal) modal.classList.add('show');
+  }
+
+  function closeQuestLog() {
+    const modal = document.getElementById('historyModal');
+    if (modal) modal.classList.remove('show');
+  }
+
+  function renderQuestLog() {
+    const container = document.getElementById('historyContent');
+    if (!container) return;
+
+    if (!S.history || S.history.length === 0) {
+      container.innerHTML = '<p style="text-align:center; opacity:0.5; padding:40px;">No historical deeds recorded yet.</p>';
+      return;
+    }
+
+    // Group by date
+    const groups = S.history.reduce((acc, g) => {
+      const date = g.completedAt.slice(0, 10);
+      if (!acc[date]) acc[date] = [];
+      acc[date].push(g);
+      return acc;
+    }, {});
+
+    const sortedDates = Object.keys(groups).sort((a, b) => b.localeCompare(a));
+
+    container.innerHTML = sortedDates.map(date => {
+      const quests = groups[date];
+      const dateLabel = new Date(date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+      
+      return `
+        <div class="history-date-group">
+          <div class="history-date-header">${dateLabel}</div>
+          ${quests.map(q => `
+            <div class="history-item">
+              <div class="history-item-main">
+                <span class="history-item-title">${q.title}</span>
+                <span class="history-item-meta">${q.category} • ${q.duration}m</span>
+              </div>
+              <div class="history-item-xp">+${q.priority === 'high' ? 50 : q.priority === 'medium' ? 25 : 10} XP</div>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }).join('');
+  }
+
   // =================== INIT ===================
   function init() {
     // Cursor glow tracking globally
@@ -2540,7 +2638,7 @@ Use Emojis. Be encouraging but honest like a high-end silicon valley coach.`;
     sendCoachMessage, toggleCoachBox, openMobileMenu, closeMobileMenu,
     openZenMode, closeZenMode, toggleZenActive,
     generateWeeklyReview, generateDailyReflection, closeReflection, requestNotifications,
-    resolveOrchestration, generateAIDraft
+    resolveOrchestration, generateAIDraft, showQuestLog, closeQuestLog
   };
 })();
 

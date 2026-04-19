@@ -4650,3 +4650,67 @@ input[type="text"]:focus, input[type="number"]:focus, select:focus, textarea:foc
 .report-text li { margin-bottom: 10px; }
 
 
+
+/* Quest Vault & History */
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.history-date-group {
+  margin-top: 15px;
+}
+
+.history-date-header {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--primary);
+  letter-spacing: 1px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid rgba(124, 92, 252, 0.2);
+  margin-bottom: 10px;
+}
+
+.history-item {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-md);
+  padding: 10px 15px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: transform 0.2s;
+}
+
+.history-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  transform: translateX(5px);
+}
+
+.history-item-main {
+  display: flex;
+  flex-direction: column;
+}
+
+.history-item-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.history-item-meta {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
+
+.history-item-xp {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--xp-color);
+  background: rgba(168, 85, 247, 0.1);
+  padding: 1px 6px;
+  border-radius: 8px;
+}

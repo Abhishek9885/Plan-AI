@@ -68,6 +68,8 @@
         <button class="header-btn notif-bell-btn" id="notifBellBtn" onclick="app.requestNotifications()" title="Notifications"><span>🔔</span><span class="header-btn-text" id="notifLabel">Notify</span><span class="notif-dot" id="notifDot"></span></button>
         <button class="header-btn hide-on-mobile" onclick="app.showSettings()" title="Settings"><span>⚙️</span><span
             class="header-btn-text">Settings</span></button>
+        <button class="header-btn" onclick="app.showQuestLog()" title="Historical Quest Log"><span>📜</span><span
+            class="header-btn-text">Quest Log</span></button>
         <button class="header-btn hide-on-mobile" onclick="app.showShortcuts()" title="Keyboard shortcuts"><span>⌨️</span><span
             class="header-btn-text">Shortcuts</span></button>
         <button class="header-btn theme-toggle-btn" id="themeToggle" onclick="app.toggleTheme()"
@@ -793,6 +795,23 @@
       <div class="zen-instruction" id="zenInstruction">Get comfortable and get ready to breathe...</div>
       <div class="zen-controls">
         <button class="btn btn-primary btn-lg" id="zenStartBtn" onclick="app.toggleZenActive()">Start Session</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quest Log Modal -->
+  <div class="modal-overlay" id="historyModal">
+    <div class="modal" style="position:relative; width:600px; max-width:95%; max-height:80vh; overflow-y:auto; background: var(--glass-bg); backdrop-filter: var(--glass-blur);">
+      <button class="modal-close" onclick="app.closeQuestLog()">✕</button>
+      <div style="display:flex; align-items:center; gap:12px; margin-bottom:20px;">
+        <span style="font-size:32px;">📜</span>
+        <div>
+          <h3 style="margin:0;">The Quest Vault</h3>
+          <p style="font-size:12px; opacity:0.6; margin:0;">Your eternal ledger of legendary deeds</p>
+        </div>
+      </div>
+      <div id="historyContent" class="history-list">
+        <p style="text-align:center; opacity:0.5; padding:40px;">No historical deeds recorded yet.</p>
       </div>
     </div>
   </div>
