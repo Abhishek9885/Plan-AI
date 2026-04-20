@@ -1186,7 +1186,6 @@ const app = (() => {
             ${g.urgent ? '<span class="badge badge-urgent">⚡ URGENT</span>' : ''}
             <span class="goal-duration">⏱️ ${durLabel(g.duration)}</span>
           </div>
-          </div>
           ${g.notes && exp ? `<div style="margin-top:5px;font-size:11px;color:var(--text-secondary);padding:5px 8px;background:var(--bg-surface);border-radius:var(--radius-sm)">${g.notes}</div>` : ''}
           ${g.aiDraft && exp ? `
             <div class="ai-draft-blueprint ${g.aiDraft.isLocal ? 'local-draft' : ''}">
@@ -1199,7 +1198,7 @@ const app = (() => {
           ` : ''}
         </div>
         <div class="goal-actions-row">
-          ${!g.completed && !g.aiDraft ? `<button class="btn btn-sm btn-ghost btn-draft" onclick="event.stopPropagation(); app.generateAIDraft('${g.id}')">✨ Draft</button>` : ''}
+          ${!g.completed ? `<button class="btn btn-sm btn-glow btn-draft" style="margin-right:8px" onclick="event.stopPropagation(); app.generateAIDraft('${g.id}')">✨ ${g.aiDraft ? 'Re-Draft' : 'Draft'}</button>` : ''}
           <span class="goal-expand-btn" onclick="app.toggleGoalExpand('${g.id}')">${exp ? '▲' : '▼'}</span>
         </div>
         <div class="goal-actions">
@@ -1528,7 +1527,7 @@ const app = (() => {
 
   async function generateAIDraft(goalId) {
     const g = S.goals.find(x => x.id === goalId);
-    if (!g || g.aiDraft) return;
+    if (!g) return;
 
     toast('AI is drafting your quest steps...', 'info');
     
@@ -1536,24 +1535,29 @@ const app = (() => {
       const prompt = `Task: "${g.title}". Role: Productivity expert. Give me a 3-step "Start Blueprint" and 1 "Pro Tip". Format as: {"steps":["step1","step2","step3"],"tip":"text"}. Keep it very short.`;
       const res = await callGemini(prompt, "You are a master productivity strategist. Return only JSON.");
       
-      if (res && res.error === 'NO_API_KEY') {
-        // Silent fallback for no key, we assume built-in AI also failed if we reached here
+      if (res && res.error) {
         g.aiDraft = generateLocalDraft(g);
-        toast('Local Smart Draft created', 'info');
-      } else if (res && res.error) {
-        throw new Error(res.error);
+      } else if (typeof res === 'string') {
+        try {
+          const jsonStr = res.substring(res.indexOf('{'), res.lastIndexOf('}') + 1);
+          g.aiDraft = JSON.parse(jsonStr);
+          g.aiDraft.isLocal = false;
+        } catch (pE) {
+          g.aiDraft = generateLocalDraft(g);
+        }
       } else {
-        const jsonStr = res.substring(res.indexOf('{'), res.lastIndexOf('}') + 1);
-        g.aiDraft = JSON.parse(jsonStr);
-        g.aiDraft.isLocal = false;
-        toast('AI Draft generated! ✨', 'success');
+        g.aiDraft = generateLocalDraft(g);
       }
+      
+      S.expandedGoals[goalId] = true;
       save(); renderGoals();
+      toast('Draft ready! ✨', 'success');
     } catch (e) {
-      console.warn('AI Drafting failed, falling back to local engine:', e);
+      console.warn('Drafting failed:', e);
       g.aiDraft = generateLocalDraft(g);
+      S.expandedGoals[goalId] = true;
       save(); renderGoals();
-      toast('Smart Draft created', 'info');
+      toast('Smart Draft ready', 'info');
     }
   }
 
