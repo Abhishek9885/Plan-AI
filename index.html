@@ -562,11 +562,15 @@
       <button class="modal-close" onclick="app.closeSettings()">✕</button>
       <h3>⚙️ General Settings</h3>
       <div class="form-group" style="margin-top:15px; border-top: 1px solid var(--border); padding-top: 15px;">
-        <label style="font-size: 11px; opacity: 0.6;">Advanced: Gemini AI Support</label>
+        <label style="font-size: 11px; opacity: 0.6; display: flex; justify-content: space-between;">
+          Advanced: Gemini AI Support
+          <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--primary); text-decoration:none;">Get your key here ↗</a>
+        </label>
         <div style="display:flex; gap:10px; margin-top:5px;">
-          <input type="password" id="geminiApiKeyInput" placeholder="Optional API Key" style="flex:1; font-size:12px;">
+          <input type="password" id="geminiApiKeyInput" placeholder="Enter Gemini API Key" style="flex:1; font-size:12px;">
           <button class="btn btn-sm btn-primary" onclick="app.saveSettings()">Connect</button>
         </div>
+        <p style="font-size: 10px; opacity: 0.5; margin-top:5px;">Linking a key enables deeper AI insights and blueprints.</p>
       </div>
 
           Sync your work issues directly as PlanAI Quests.

@@ -1175,8 +1175,8 @@ const app = (() => {
           </div>
           ${g.notes && exp ? `<div style="margin-top:5px;font-size:11px;color:var(--text-secondary);padding:5px 8px;background:var(--bg-surface);border-radius:var(--radius-sm)">${g.notes}</div>` : ''}
           ${g.aiDraft && exp ? `
-            <div class="ai-draft-blueprint">
-              <div class="blueprint-label">💎 AI BLUEPRINT</div>
+            <div class="ai-draft-blueprint ${g.aiDraft.isLocal ? 'local-draft' : ''}">
+              <div class="blueprint-label">${g.aiDraft.isLocal ? '🌱 LOCAL SMART DRAFT' : '💎 AI BLUEPRINT'}</div>
               <ul class="blueprint-steps">
                 ${g.aiDraft.steps.map(s => `<li>${s}</li>`).join('')}
               </ul>
@@ -1487,21 +1487,61 @@ const app = (() => {
     }
   }
 
+  function generateLocalDraft(goal) {
+    const title = goal.title.toLowerCase();
+    const cat = goal.category || 'work';
+    
+    // Default steps
+    let steps = ["Define the scope of the task", "Focus on core execution", "Review and finalize"];
+    let tip = "Break this into 3 smaller subtasks to build momentum!";
+
+    if (cat === 'health' || title.includes('run') || title.includes('gym') || title.includes('exercise')) {
+      steps = ["Prepare your gear and environment", "Execute your routine with correct form", "Hydrate and log your progress"];
+      tip = "Put your workout clothes out the night before!";
+    } else if (cat === 'learning' || title.includes('read') || title.includes('study') || title.includes('learn')) {
+      steps = ["Eliminate all distractions", "Active engagement (notes, exercises)", "Summarize the key takeaways"];
+      tip = "Use the Feynman Technique: explain what you learned to a pretend student.";
+    } else if (cat === 'work' || title.includes('code') || title.includes('write') || title.includes('design')) {
+      steps = ["Draft a quick outline or wireframe", "Deep focus block (Pomodoro)", "Self-review and polish"];
+      tip = "Turn off notifications for 25 minutes of deep focus.";
+    } else if (cat === 'personal' || title.includes('clean') || title.includes('buy') || title.includes('home')) {
+      steps = ["Gather necessary tools/supplies", "Complete the primary objective", "Tidy up the surrounding area"];
+      tip = "Setting a 10-minute timer can turn a chore into a race!";
+    }
+
+    return { steps, tip, isLocal: true };
+  }
+
   async function generateAIDraft(goalId) {
     const g = S.goals.find(x => x.id === goalId);
     if (!g || g.aiDraft) return;
 
     toast('AI is drafting your quest steps...', 'info');
+    
     try {
+      if (!S.geminiApiKey) {
+        throw new Error('NO_API_KEY');
+      }
+
       const prompt = `Task: "${g.title}". Role: Productivity expert. Give me a 3-step "Start Blueprint" and 1 "Pro Tip". Format as: {"steps":["step1","step2","step3"],"tip":"text"}. Keep it very short.`;
       const res = await callGemini(prompt, "You are a master productivity strategist. Return only JSON.");
+      
+      if (res && res.error) throw new Error(res.error);
+      
       const jsonStr = res.substring(res.indexOf('{'), res.lastIndexOf('}') + 1);
       g.aiDraft = JSON.parse(jsonStr);
+      g.aiDraft.isLocal = false;
       save(); renderGoals();
-      toast('Draft generated! ✨', 'success');
+      toast('AI Draft generated! ✨', 'success');
     } catch (e) {
-      console.error(e);
-      toast('AI Drafting failed. Try again?', 'error');
+      console.warn('AI Drafting failed, falling back to local engine:', e);
+      g.aiDraft = generateLocalDraft(g);
+      save(); renderGoals();
+      if (e.message === 'NO_API_KEY') {
+        toast('Local Smart Draft created (AI Key missing)', 'info');
+      } else {
+        toast('Local Smart Draft created (AI busy)', 'info');
+      }
     }
   }
 
