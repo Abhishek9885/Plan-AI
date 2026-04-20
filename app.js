@@ -878,9 +878,11 @@ const app = (() => {
   // =================== GOLD SHOP ===================
   function renderShop() {
     const el = document.getElementById('shopGrid');
-    const userGold = document.getElementById('userGold'); // Update gold in header too
+    const userGold = document.getElementById('userGold');
+    const shopGold = document.getElementById('shopUserGold');
     if (!el) return;
     if (userGold) userGold.textContent = S.gold;
+    if (shopGold) shopGold.textContent = S.gold;
 
     el.innerHTML = SHOP_ITEMS.map(item => {
       const isOwned = S.inventory.includes(item.id);
@@ -928,7 +930,10 @@ const app = (() => {
     playSound('level');
     save();
     renderShop();
-    if (document.getElementById('userGold')) animateValue(document.getElementById('userGold'), S.gold);
+    const ug = document.getElementById('userGold');
+    const sg = document.getElementById('shopUserGold');
+    if (ug) animateValue(ug, S.gold);
+    if (sg) animateValue(sg, S.gold);
   }
 
   // =================== DAY RECOVERY MODE ===================
@@ -2705,7 +2710,8 @@ Use Emojis. Be encouraging but honest like a high-end silicon valley coach.`;
     sendCoachMessage, toggleCoachBox, openMobileMenu, closeMobileMenu,
     openZenMode, closeZenMode, toggleZenActive,
     generateWeeklyReview, generateDailyReflection, closeReflection, requestNotifications,
-    resolveOrchestration, generateAIDraft, showQuestLog, closeQuestLog
+    resolveOrchestration, generateAIDraft, showQuestLog, closeQuestLog,
+    buyItem, renderShop
   };
 })();
 
