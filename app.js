@@ -1187,8 +1187,18 @@ const app = (() => {
             <span class="goal-duration">⏱️ ${durLabel(g.duration)}</span>
           </div>
           ${g.notes && exp ? `<div style="margin-top:5px;font-size:11px;color:var(--text-secondary);padding:5px 8px;background:var(--bg-surface);border-radius:var(--radius-sm)">${g.notes}</div>` : ''}
+          ${g.aiDraft && exp ? `
+            <div class="ai-draft-blueprint ${g.aiDraft.isLocal ? 'local-draft' : ''}">
+              <div class="blueprint-label">${g.aiDraft.isLocal ? '🌱 LOCAL SMART DRAFT' : '💎 AI BLUEPRINT'}</div>
+              <ul class="blueprint-steps">
+                ${g.aiDraft.steps.map(s => `<li>${s}</li>`).join('')}
+              </ul>
+              <div class="blueprint-tip">💡 Tip: ${g.aiDraft.tip}</div>
+            </div>
+          ` : ''}
         </div>
         <div class="goal-actions-row">
+          ${!g.completed ? `<button class="btn btn-sm btn-glow btn-draft" style="margin-right:8px" onclick="event.stopPropagation(); app.generateAIDraft('${g.id}')">✨ ${g.aiDraft ? 'Re-Draft' : 'Draft'}</button>` : ''}
           <span class="goal-expand-btn" onclick="app.toggleGoalExpand('${g.id}')">${exp ? '▲' : '▼'}</span>
         </div>
         <div class="goal-actions">
@@ -1209,6 +1219,7 @@ const app = (() => {
         <div class="card-title">${g.title}</div>
         <div class="card-meta">
           <span class="badge badge-${g.category}" style="font-size:9px">${AIScheduler.CATEGORY_EMOJI[g.category]} ${g.category}</span>
+          ${g.aiDraft ? '<span class="badge badge-draft-active" style="font-size:8px">✨ DRAFT</span>' : ''}
         </div>
       </div>`).join('') : '<div style="text-align:center;color:var(--text-tertiary);font-size:11px;padding:14px">No goals</div>';
     document.getElementById('boardHigh').innerHTML = render(S.goals.filter(g => g.priority === 'high'));
@@ -1489,6 +1500,80 @@ const app = (() => {
     }
   }
 
+  function generateLocalDraft(goal) {
+    const title = goal.title.toLowerCase();
+    const cat = goal.category || 'work';
+    
+    // Pattern pools for variety
+    const verbPool = ["Analyze", "Execute", "Review", "Optimize", "Finalize"];
+    const tips = {
+      health: ["Put your workout clothes out the night before!", "Drink a glass of water before starting active exercise.", "Focus on form over speed to prevent burnout.", "Track your stats—what gets measured gets managed!", "Consistency is better than intensity!"],
+      learning: ["Use the Feynman Technique: explain it to a pretend student.", "Spaced repetition (revising after 1, 3, and 7 days) is key.", "Active recall (testing yourself) beats passive reading.", "Eliminate all digital distractions for this learning block.", "Take 5-minute breaks every 25 minutes (Pomodoro strategy)."],
+      work: ["Turn off all notifications for 25 minutes of deep focus.", "The 'Eat the Frog' rule: do the hardest part of this task first.", "Set a timer—work expands to fill the time available (Parkinson's Law).", "Done is better than perfect. Refine later.", "Break this into 3 tiny subtasks to build momentum."],
+      personal: ["Setting a 10-minute timer can turn a chore into a race!", "Tidy your environment first to clear your mind.", "Listen to a podcast—it turns chores into learning time.", "Batch similar tasks together to save mental energy.", "Start with the smallest step to overcome procrastination."]
+    };
+
+    const getTip = (c) => {
+      const pool = tips[c] || tips.work;
+      return pool[Math.floor(Math.random() * pool.length)];
+    };
+
+    const templates = [
+      { keywords: ['read', 'book', 'article', 'page'], steps: [`Find a quiet spot for "${goal.title}"`, `Active reading block: focus on key concepts`, `Summarize 3 takeaways from "${goal.title}"`], tip: getTip('learning') },
+      { keywords: ['code', 'program', 'debug', 'fix', 'app', 'dev', 'dsa', 'ai'], steps: [`Analyze the core logic for "${goal.title}"`, `Execute deep development/debugging block`, `Verify implementation and run tests`], tip: getTip('work') },
+      { keywords: ['write', 'email', 'draft', 'post', 'blog', 'doc'], steps: [`Draft the outline for "${goal.title}"`, `Write the first version without editing`, `Review for clarity, tone, and grammar`], tip: getTip('work') },
+      { keywords: ['gym', 'workout', 'run', 'exercise', 'yoga', 'sport', 'train'], steps: [`Prepare gear for "${goal.title}"`, `Complete the active routine with focus`, `Cooldown and log performance data`], tip: getTip('health') },
+      { keywords: ['study', 'learn', 'course', 'video', 'watch', 'lesson'], steps: [`Gather all materials for "${goal.title}"`, `Deep immersion/Learning session`, `Self-test on concepts from "${goal.title}"`], tip: getTip('learning') },
+      { keywords: ['clean', 'tidy', 'organize', 'home', 'room', 'dishes'], steps: [`Set up tools for "${goal.title}"`, `Execution: Top-to-bottom cleanup`, `Final reset of the environment`], tip: getTip('personal') },
+      { keywords: ['meet', 'call', 'discuss', 'zoom', 'talk', 'sync'], steps: [`Review agenda for "${goal.title}"`, `Active participation & key notes`, `Follow up on action items`], tip: getTip('work') }
+    ];
+
+    let match = templates.find(t => t.keywords.some(k => title.includes(k)));
+    if (!match) {
+      if (cat === 'health') match = templates[3];
+      else if (cat === 'learning') match = templates[4];
+      else if (cat === 'personal') match = templates[5];
+      else match = { steps: [`Define the scope for "${goal.title}"`, `Execute core requirements with focus`, `Review results and finalize`], tip: getTip('work') };
+    }
+
+    return { steps: match.steps, tip: match.tip, isLocal: true };
+  }
+
+  async function generateAIDraft(goalId) {
+    const g = S.goals.find(x => x.id === goalId);
+    if (!g) return;
+
+    toast('AI is drafting your quest steps...', 'info');
+    
+    try {
+      const prompt = `Task: "${g.title}". Role: Productivity expert. Give me a 3-step "Start Blueprint" and 1 "Pro Tip". Format as: {"steps":["step1","step2","step3"],"tip":"text"}. Keep it very short.`;
+      const res = await callGemini(prompt, "You are a master productivity strategist. Return only JSON.");
+      
+      if (res && res.error) {
+        g.aiDraft = generateLocalDraft(g);
+      } else if (typeof res === 'string') {
+        try {
+          const jsonStr = res.substring(res.indexOf('{'), res.lastIndexOf('}') + 1);
+          g.aiDraft = JSON.parse(jsonStr);
+          g.aiDraft.isLocal = false;
+        } catch (pE) {
+          g.aiDraft = generateLocalDraft(g);
+        }
+      } else {
+        g.aiDraft = generateLocalDraft(g);
+      }
+      
+      S.expandedGoals[goalId] = true;
+      save(); renderGoals();
+      toast('Draft ready! ✨', 'success');
+    } catch (e) {
+      console.warn('Drafting failed:', e);
+      g.aiDraft = generateLocalDraft(g);
+      S.expandedGoals[goalId] = true;
+      save(); renderGoals();
+      toast('Smart Draft ready', 'info');
+    }
+  }
 
   // =================== HABITS ===================
   function addHabit(name, icon) { S.habits.push({ id: genId(), name, icon, streak: 0, completedDates: {}, createdAt: new Date().toISOString() }); save(); playSound('check'); toast(`Habit "${name}" created!`, 'success'); renderHabits() }
