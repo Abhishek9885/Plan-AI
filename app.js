@@ -526,8 +526,22 @@ const app = (() => {
   }
 
   async function callGemini(prompt, systemInstruction = "") {
+    // 1. Try Chrome Built-in AI (Gemini Nano)
+    try {
+      if (typeof window.ai !== 'undefined' && window.ai.languageModel) {
+        const capabilities = await window.ai.languageModel.capabilities();
+        if (capabilities.available !== 'no') {
+          const session = await window.ai.languageModel.create({
+            systemPrompt: systemInstruction || "You are a master productivity strategist. Return concise responses."
+          });
+          const result = await session.prompt(prompt);
+          return result;
+        }
+      }
+    } catch (e) { console.warn("Built-in AI check failed:", e); }
+
+    // 2. Fallback to Cloud AI (API Key)
     if (!S.geminiApiKey) {
-      // No automatic popup here anymore, handle it in the caller
       return { error: 'NO_API_KEY' };
     }
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${S.geminiApiKey}`;
@@ -1491,25 +1505,25 @@ const app = (() => {
     const title = goal.title.toLowerCase();
     const cat = goal.category || 'work';
     
-    // Default steps
-    let steps = ["Define the scope of the task", "Focus on core execution", "Review and finalize"];
-    let tip = "Break this into 3 smaller subtasks to build momentum!";
+    const templates = [
+      { keywords: ['read', 'book', 'article', 'page'], steps: ["Find a quiet spot & set a focus goal", `Read "${goal.title}" for 20-30 mins`, "Summarize 3 main takeaways in notes"], tip: "Active reading (highlighting) improves retention!" },
+      { keywords: ['code', 'program', 'debug', 'fix', 'app', 'dev'], steps: [`Analyze the scope of "${goal.title}"`, "Deep work block (25m Pomodoro)", "Run tests and verify implementation"], tip: "Try Rubber Duck Debugging: explain the problem out loud to yourself!" },
+      { keywords: ['write', 'email', 'draft', 'post', 'blog', 'doc'], steps: ["Outline the core message / points", "Write the first draft without editing", "Review for clarity, tone, and grammar"], tip: "The best writing is rewriting. Get the first version out fast!" },
+      { keywords: ['gym', 'workout', 'run', 'exercise', 'yoga', 'sport', 'train'], steps: ["Quick warm-up and hydration prep", `Complete the "${goal.title}" routine`, "Cooldown stretch and log your performance"], tip: "Music at 120-140 BPM is scientifically proven to boost stamina!" },
+      { keywords: ['study', 'learn', 'course', 'video', 'watch', 'lesson'], steps: ["Gather all necessary study materials", "Active learning session (Deep focus)", "Explain the core concepts to yourself"], tip: "Spaced repetition and active recall are the secrets to memory!" },
+      { keywords: ['clean', 'tidy', 'organize', 'home', 'room', 'dishes'], steps: ["Declutter the area and gather tools", "Primary execution (top-to-bottom)", "Final sweep and reset the environment"], tip: "Listen to a podcast or audiobook—it turns chores into fun time!" },
+      { keywords: ['meet', 'call', 'discuss', 'zoom', 'talk', 'sync'], steps: ["Review agenda and set objectives", "Active participation and key notes", "Follow up on assigned action items"], tip: "A 5-minute pre-meeting review can save an hour of confusion." }
+    ];
 
-    if (cat === 'health' || title.includes('run') || title.includes('gym') || title.includes('exercise')) {
-      steps = ["Prepare your gear and environment", "Execute your routine with correct form", "Hydrate and log your progress"];
-      tip = "Put your workout clothes out the night before!";
-    } else if (cat === 'learning' || title.includes('read') || title.includes('study') || title.includes('learn')) {
-      steps = ["Eliminate all distractions", "Active engagement (notes, exercises)", "Summarize the key takeaways"];
-      tip = "Use the Feynman Technique: explain what you learned to a pretend student.";
-    } else if (cat === 'work' || title.includes('code') || title.includes('write') || title.includes('design')) {
-      steps = ["Draft a quick outline or wireframe", "Deep focus block (Pomodoro)", "Self-review and polish"];
-      tip = "Turn off notifications for 25 minutes of deep focus.";
-    } else if (cat === 'personal' || title.includes('clean') || title.includes('buy') || title.includes('home')) {
-      steps = ["Gather necessary tools/supplies", "Complete the primary objective", "Tidy up the surrounding area"];
-      tip = "Setting a 10-minute timer can turn a chore into a race!";
+    let match = templates.find(t => t.keywords.some(k => title.includes(k)));
+    if (!match) {
+      if (cat === 'health') match = templates[3];
+      else if (cat === 'learning') match = templates[4];
+      else if (cat === 'personal') match = templates[5];
+      else match = { steps: [`Define the scope for "${goal.title}"`, "Execute the core requirements", "Review results and finalize"], tip: "Breaking tasks into tiny pieces makes them 10x easier to start!" };
     }
 
-    return { steps, tip, isLocal: true };
+    return { steps: match.steps, tip: match.tip, isLocal: true };
   }
 
   async function generateAIDraft(goalId) {
@@ -1519,29 +1533,27 @@ const app = (() => {
     toast('AI is drafting your quest steps...', 'info');
     
     try {
-      if (!S.geminiApiKey) {
-        throw new Error('NO_API_KEY');
-      }
-
       const prompt = `Task: "${g.title}". Role: Productivity expert. Give me a 3-step "Start Blueprint" and 1 "Pro Tip". Format as: {"steps":["step1","step2","step3"],"tip":"text"}. Keep it very short.`;
       const res = await callGemini(prompt, "You are a master productivity strategist. Return only JSON.");
       
-      if (res && res.error) throw new Error(res.error);
-      
-      const jsonStr = res.substring(res.indexOf('{'), res.lastIndexOf('}') + 1);
-      g.aiDraft = JSON.parse(jsonStr);
-      g.aiDraft.isLocal = false;
+      if (res && res.error === 'NO_API_KEY') {
+        // Silent fallback for no key, we assume built-in AI also failed if we reached here
+        g.aiDraft = generateLocalDraft(g);
+        toast('Local Smart Draft created', 'info');
+      } else if (res && res.error) {
+        throw new Error(res.error);
+      } else {
+        const jsonStr = res.substring(res.indexOf('{'), res.lastIndexOf('}') + 1);
+        g.aiDraft = JSON.parse(jsonStr);
+        g.aiDraft.isLocal = false;
+        toast('AI Draft generated! ✨', 'success');
+      }
       save(); renderGoals();
-      toast('AI Draft generated! ✨', 'success');
     } catch (e) {
       console.warn('AI Drafting failed, falling back to local engine:', e);
       g.aiDraft = generateLocalDraft(g);
       save(); renderGoals();
-      if (e.message === 'NO_API_KEY') {
-        toast('Local Smart Draft created (AI Key missing)', 'info');
-      } else {
-        toast('Local Smart Draft created (AI busy)', 'info');
-      }
+      toast('Smart Draft created', 'info');
     }
   }
 
